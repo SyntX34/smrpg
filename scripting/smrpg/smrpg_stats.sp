@@ -1048,13 +1048,22 @@ public int Panel_DoNothing(Menu menu, MenuAction action, int param1, int param2)
 
 void DisplayNextPlayersInRanking(int client)
 {
-	if(!g_hDatabase)
-		return; // TODO: Print message about database problems.
-	
-	char sQuery[512];
-	Format(sQuery, sizeof(sQuery), "SELECT player_id, name, level, experience, credits, (SELECT COUNT(*) FROM %s ps WHERE p.level < ps.level OR (p.level = ps.level AND p.experience < ps.experience))+1 AS rank FROM %s p WHERE level > %d OR (level = %d AND experience >= %d) ORDER BY level ASC, experience ASC LIMIT 20", TBL_PLAYERS, TBL_PLAYERS, GetClientLevel(client), GetClientLevel(client), GetClientExperience(client));
-	g_hDatabase.Query(SQL_GetNext10, sQuery, GetClientUserId(client));
+    if (!g_hDatabase)
+        return; // TODO: Print message about database problems.
+
+    char sQuery[256];
+    Format(sQuery, sizeof(sQuery),
+        "SELECT name, level, experience, credits FROM %s WHERE level > %d OR (level = %d AND experience > %d) ORDER BY level ASC, experience ASC LIMIT 10",
+        TBL_PLAYERS,
+        GetClientLevel(client),
+        GetClientLevel(client),
+        GetClientExperience(client)
+    );
+
+    g_hDatabase.Query(SQL_GetNextPlayers, sQuery, GetClientUserId(client));
 }
+
+
 
 enum struct NextPlayersSorting {
 	int DBID;
@@ -1065,83 +1074,51 @@ enum struct NextPlayersSorting {
 	char name[MAX_NAME_LENGTH];
 }
 
-public void SQL_GetNext10(Database db, DBResultSet results, const char[] error, any userid)
+public void SQL_GetNextPlayers(Database db, DBResultSet results, const char[] error, any userid)
 {
-	int client = GetClientOfUserId(userid);
-	if(!client)
-		return;
-	
-	if(results == null)
-	{
-		LogError("Unable to get the next 20 players in front of the current rank of a player (%s)", error);
-		return;
-	}
-	
-	char sBuffer[128];
-	Format(sBuffer, sizeof(sBuffer), "%T\n-----\n", "Next ranked players", client);
-	
-	NextPlayersSorting nextCache[20];
-	int iCount;
-	
-	Panel hPanel = new Panel();
-	hPanel.SetTitle(sBuffer);
-	
-	while(results.MoreRows)
-	{
-		if(!results.FetchRow())
-			continue;
-		
-		results.FetchString(1, nextCache[iCount].name, MAX_NAME_LENGTH);
-		nextCache[iCount].DBID = results.FetchInt(0);
-		nextCache[iCount].level = results.FetchInt(2);
-		nextCache[iCount].exp = results.FetchInt(3);
-		nextCache[iCount].credits = results.FetchInt(4);
-		nextCache[iCount].rank = results.FetchInt(5);
-		iCount++;
-	}
-	
-	// TODO: Account for currently ingame players that got above us in the ranking and aren't in the db yet, so they aren't in the result set of the query.
-	
-	// See if some players are currently connected and possibly have newer stats in the cache than stored in the db
-	int iLocalPlayer;
-	for(int i=0;i<iCount;i++)
-	{
-		iLocalPlayer = GetClientByPlayerID(nextCache[i].DBID);
-		if(iLocalPlayer == -1)
-			continue;
-		
-		nextCache[i].level = GetClientLevel(iLocalPlayer);
-		nextCache[i].exp = GetClientExperience(iLocalPlayer);
-		nextCache[i].credits = GetClientCredits(iLocalPlayer);
-	}
-	
-	SortCustom2D(nextCache, iCount, Sort2D_NextPlayers);
-	
-	// Save the next rank as reference if the list is reordered with current data below
-	int iLastRank = nextCache[0].rank;
-	// Fix rank if ordering changed!
-	for(int i=0;i<iCount;i++)
-	{
-		nextCache[i].rank = iLastRank--;
-	}
-	
-	int iNeeded = iCount > 10 ? 10 : iCount;
-	for(int i=0;i<iCount&&iNeeded>0;i++)
-	{
-		if(nextCache[i].level < GetClientLevel(client) || (nextCache[i].level == GetClientLevel(client) && nextCache[i].exp < GetClientExperience(client)))
-			continue;
-		
-		Format(sBuffer, sizeof(sBuffer), "%d. %s Lvl: %d Exp: %d Cr: %d", nextCache[i].rank, nextCache[i].name, nextCache[i].level, nextCache[i].exp, nextCache[i].credits);
-		hPanel.DrawText(sBuffer);
-		iNeeded--;
-	}
-	
-	// Let the panel close on any number
-	hPanel.SetKeys(255);
-	
-	hPanel.Send(client, Panel_DoNothing, MENU_TIME_FOREVER);
-	delete hPanel;
+    int client = GetClientOfUserId(userid);
+    if (!client)
+        return;
+
+    if (results == null)
+    {
+        LogError("Unable to get next ranked players (%s)", error);
+        return;
+    }
+
+    char sBuffer[128];
+    Format(sBuffer, sizeof(sBuffer), "Next Ranked Players\n-----\n");
+
+    Panel hPanel = new Panel();
+    hPanel.SetTitle(sBuffer);
+
+    int iIndex = 1;
+    while (results.MoreRows)
+    {
+        if (!results.FetchRow())
+            continue;
+
+        char playerName[MAX_NAME_LENGTH];
+        results.FetchString(0, playerName, sizeof(playerName));
+        int playerLevel = results.FetchInt(1);
+        int playerExperience = results.FetchInt(2);
+        int playerCredits = results.FetchInt(3);
+
+        Format(sBuffer, sizeof(sBuffer), "%d. %s Lvl: %d Exp: %d Cr: %d",
+               iIndex++, playerName, playerLevel, playerExperience, playerCredits);
+        hPanel.DrawText(sBuffer);
+    }
+
+    // Let the panel close on any number
+    hPanel.SetKeys(255);
+    
+    hPanel.Send(client, Panel_DoNothing, MENU_TIME_FOREVER);
+    delete hPanel;
 }
+
+
+
+
 
 // Sort players ascending by level and experience
 public int Sort2D_NextPlayers(int[] elem1, int[] elem2, const int[][] array, Handle hndl)
