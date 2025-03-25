@@ -12,6 +12,7 @@ ConVar g_hCVLimitDmg;
 ConVar g_hCVDurationIncrease;
 ConVar g_hCVMinDamage;
 ConVar g_hCVWeapon;
+ConVar g_hCVAllowDamage;
 
 public Plugin myinfo = 
 {
@@ -46,22 +47,22 @@ public void OnAllPluginsLoaded()
 
 public void OnLibraryAdded(const char[] name)
 {
-	// Register this upgrade in SM:RPG
-	if(StrEqual(name, "smrpg"))
-	{
-		SMRPG_RegisterUpgradeType("Ice Grenade", UPGRADE_SHORTNAME, "Freeze a player in place when damaged by your grenade.", 0, true, 5, 15, 10);
-		SMRPG_SetUpgradeActiveQueryCallback(UPGRADE_SHORTNAME, SMRPG_ActiveQuery);
-		SMRPG_SetUpgradeResetCallback(UPGRADE_SHORTNAME, SMRPG_ResetEffect);
-		SMRPG_SetUpgradeTranslationCallback(UPGRADE_SHORTNAME, SMRPG_TranslateUpgrade);
-		SMRPG_SetUpgradeDefaultCosmeticEffect(UPGRADE_SHORTNAME, SMRPG_FX_Sounds, true);
-		SMRPG_SetUpgradeDefaultCosmeticEffect(UPGRADE_SHORTNAME, SMRPG_FX_Visuals, true);
-		
-		// Still read this, but deprecate it for new installs. Use the freeze_limit_damage.cfg now.
-		g_hCVLimitDmg = CreateConVar("smrpg_icenade_limit_dmg", "10", "Maximum damage that can be done upon frozen victims (0 = disable)", 0, true, 0.0);
-		g_hCVDurationIncrease = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_icenade_inc", "1.0", "Freeze duration increase in seconds for every level", _, true, 0.1);
-		g_hCVMinDamage = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_icenade_mindmg", "10.0", "Minimum damage done with the grenade to trigger the effect", _, true, 0.0);
-		g_hCVWeapon = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_icenade_weapon", "hegrenade", "Entity name of the weapon which should trigger the effect. (e.g. hegrenade)");
-	}
+    if (StrEqual(name, "smrpg"))
+    {
+        SMRPG_RegisterUpgradeType("Ice Grenade", UPGRADE_SHORTNAME, "Freeze a player in place when damaged by your grenade.", 0, true, 5, 15, 10);
+        SMRPG_SetUpgradeActiveQueryCallback(UPGRADE_SHORTNAME, SMRPG_ActiveQuery);
+        SMRPG_SetUpgradeResetCallback(UPGRADE_SHORTNAME, SMRPG_ResetEffect);
+        SMRPG_SetUpgradeTranslationCallback(UPGRADE_SHORTNAME, SMRPG_TranslateUpgrade);
+        SMRPG_SetUpgradeDefaultCosmeticEffect(UPGRADE_SHORTNAME, SMRPG_FX_Sounds, true);
+        SMRPG_SetUpgradeDefaultCosmeticEffect(UPGRADE_SHORTNAME, SMRPG_FX_Visuals, true);
+
+        g_hCVLimitDmg = CreateConVar("smrpg_icenade_limit_dmg", "10", "Maximum damage that can be done upon frozen victims (0 = disable)", 0, true, 0.0);
+        g_hCVDurationIncrease = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_icenade_inc", "1.0", "Freeze duration increase in seconds for every level", _, true, 0.1);
+        g_hCVMinDamage = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_icenade_mindmg", "10.0", "Minimum damage done with the grenade to trigger the effect", _, true, 0.0);
+        g_hCVWeapon = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_icenade_weapon", "hegrenade", "Entity name of the weapon which should trigger the effect. (e.g. hegrenade)");
+
+        g_hCVAllowDamage = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_icenade_allow_damage", "0", "Allow frozen players to take damage from other sources (1 = Yes, 0 = No)", _, true, 0.0, true, 1.0);
+    }
 }
 
 public void OnClientPutInServer(int client)
@@ -72,10 +73,13 @@ public void OnClientPutInServer(int client)
 /**
  * SM:RPG Upgrade callbacks
  */
+
 public bool SMRPG_ActiveQuery(int client)
 {
-	// TODO: Differenciate if we froze the client ourself
-	return SMRPG_IsClientFrozen(client);
+    if (g_hCVAllowDamage.BoolValue)
+        return false;
+
+    return SMRPG_IsClientFrozen(client);
 }
 
 // Some plugin wants this effect to end?

@@ -13,6 +13,7 @@
 ConVar g_hCVDurationIncrease;
 ConVar g_hCVMinDamage;
 ConVar g_hCVWeapon;
+ConVar g_hCVAllowDamage;
 
 public Plugin myinfo = 
 {
@@ -47,18 +48,19 @@ public void OnAllPluginsLoaded()
 
 public void OnLibraryAdded(const char[] name)
 {
-	// Register this upgrade in SM:RPG
-	if(StrEqual(name, "smrpg"))
-	{
-		SMRPG_RegisterUpgradeType("Fire Grenade", UPGRADE_SHORTNAME, "Ignites players damaged by your grenade.", 0, true, 5, 15, 10);
-		SMRPG_SetUpgradeActiveQueryCallback(UPGRADE_SHORTNAME, SMRPG_ActiveQuery);
-		SMRPG_SetUpgradeResetCallback(UPGRADE_SHORTNAME, SMRPG_ResetEffect);
-		SMRPG_SetUpgradeTranslationCallback(UPGRADE_SHORTNAME, SMRPG_TranslateUpgrade);
-		
-		g_hCVDurationIncrease = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_fnade_inc", "2", "Ignite duration increase in seconds for every level", _, true, 0.1);
-		g_hCVMinDamage = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_fnade_mindmg", "5.0", "Minimum damage done with the grenade to trigger the effect", _, true, 0.0);
-		g_hCVWeapon = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_fnade_weapon", "hegrenade", "Entity name of the weapon which should trigger the effect. (e.g. hegrenade flashbang)");
-	}
+    if (StrEqual(name, "smrpg"))
+    {
+        SMRPG_RegisterUpgradeType("Fire Grenade", UPGRADE_SHORTNAME, "Ignites players damaged by your grenade.", 0, true, 5, 15, 10);
+        SMRPG_SetUpgradeActiveQueryCallback(UPGRADE_SHORTNAME, SMRPG_ActiveQuery);
+        SMRPG_SetUpgradeResetCallback(UPGRADE_SHORTNAME, SMRPG_ResetEffect);
+        SMRPG_SetUpgradeTranslationCallback(UPGRADE_SHORTNAME, SMRPG_TranslateUpgrade);
+
+        g_hCVDurationIncrease = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_fnade_inc", "2", "Ignite duration increase in seconds for every level", _, true, 0.1);
+        g_hCVMinDamage = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_fnade_mindmg", "5.0", "Minimum damage done with the grenade to trigger the effect", _, true, 0.0);
+        g_hCVWeapon = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_fnade_weapon", "hegrenade", "Entity name of the weapon which should trigger the effect. (e.g. hegrenade flashbang)");
+    
+        g_hCVAllowDamage = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_fnade_allow_damage", "0", "Allow burning players to take damage from other sources (1 = Yes, 0 = No)", _, true, 0.0, true, 1.0);
+    }
 }
 
 public void OnClientPutInServer(int client)
@@ -72,8 +74,10 @@ public void OnClientPutInServer(int client)
 
 public bool SMRPG_ActiveQuery(int client)
 {
-	// TODO: Check if client is burning because of this upgrade?
-	return SMRPG_IsClientBurning(client);
+    if (g_hCVAllowDamage.BoolValue)
+        return false;
+
+    return SMRPG_IsClientBurning(client);
 }
 
 // Some plugin wants this effect to end?
