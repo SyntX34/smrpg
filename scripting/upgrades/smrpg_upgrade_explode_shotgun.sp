@@ -7,12 +7,19 @@
 #pragma newdecls required
 #include <smrpg>
 #include <smrpg_effects>
+#if defined _smrpg_sharedmaterials_included
+#include <smrpg_sharedmaterials>
+#endif
 
 #define UPGRADE_SHORTNAME "explodeshotgun"
 
 ConVar g_hCVExplosionChance;
 ConVar g_hCVExplosionRadius;
 ConVar g_hCVExplosionDamage;
+
+// Visual effect models
+int g_iSpriteBeam;
+int g_iSpriteHalo;
 
 public Plugin myinfo = 
 {
@@ -43,6 +50,28 @@ public void OnPluginEnd()
 public void OnAllPluginsLoaded()
 {
 	OnLibraryAdded("smrpg");
+}
+
+public void OnMapStart()
+{
+	AddFileToDownloadsTable("materials/effects/fire_cloud1b.vmt");
+	AddFileToDownloadsTable("materials/effects/fire_cloud2b.vmt");
+	AddFileToDownloadsTable("materials/effects/fire_embers1b.vmt");
+	AddFileToDownloadsTable("materials/effects/fire_embers2b.vmt");
+	AddFileToDownloadsTable("materials/effects/fire_embers3b.vmt");
+	AddFileToDownloadsTable("materials/effects/fire_cloud1b.vtf");
+	AddFileToDownloadsTable("materials/effects/fire_cloud2b.vtf");
+	AddFileToDownloadsTable("materials/effects/fire_embers1b.vtf");
+	AddFileToDownloadsTable("materials/effects/fire_embers2b.vtf");
+	AddFileToDownloadsTable("materials/effects/fire_embers3b.vtf");
+	
+	#if defined _smrpg_sharedmaterials_included
+	g_iSpriteBeam = SMRPG_GC_PrecacheModel("SpriteBeam");
+	g_iSpriteHalo = SMRPG_GC_PrecacheModel("SpriteHalo");
+	#else
+	g_iSpriteBeam = PrecacheModel("materials/sprites/bomb_planted_ring.vmt");
+	g_iSpriteHalo = PrecacheModel("materials/sprites/halo.vtf");
+	#endif
 }
 
 public void OnLibraryAdded(const char[] name)
@@ -123,7 +152,11 @@ public void Hook_OnTakeDamagePost(int victim, int attacker, int inflictor, float
 	if(!SMRPG_RunUpgradeEffect(victim, UPGRADE_SHORTNAME, attacker))
 		return; 
 	
-	CreateExplosionEffect(victim, attacker, iLevel, damagePosition);
+	float victimPos[3];
+	GetClientAbsOrigin(victim, victimPos);
+	victimPos[2] += 30.0;
+	
+	CreateExplosionEffect(victim, attacker, iLevel, victimPos);
 }
 
 /**
@@ -132,6 +165,8 @@ public void Hook_OnTakeDamagePost(int victim, int attacker, int inflictor, float
 void CreateExplosionEffect(int victim, int attacker, int level, const float impactPosition[3])
 {
 	EmitAmbientSound("weapons/explode3.wav", impactPosition, SOUND_FROM_WORLD, SNDLEVEL_GUNFIRE);
+	CreateVisualEffects(impactPosition);
+	CreateGroundBeacon(impactPosition);
 	
 	float explosionRadius = g_hCVExplosionRadius.FloatValue;
 	float explosionDamage = g_hCVExplosionDamage.FloatValue * float(level) / 10.0;
@@ -141,7 +176,6 @@ void CreateExplosionEffect(int victim, int attacker, int level, const float impa
 		if(!IsClientInGame(i) || !IsPlayerAlive(i) || i == attacker)
 			continue;
 		
-
 		if(!SMRPG_IsFFAEnabled() && GetClientTeam(i) == GetClientTeam(attacker))
 			continue;
 		
@@ -155,9 +189,77 @@ void CreateExplosionEffect(int victim, int attacker, int level, const float impa
 			
 			SDKHooks_TakeDamage(i, attacker, attacker, scaledDamage, DMG_BLAST);
 			
-			SMRPG_IgniteClient(i, 2.0, UPGRADE_SHORTNAME, true, attacker);
+			float pushForce[3];
+			MakeVectorFromPoints(impactPosition, targetPos, pushForce);
+			NormalizeVector(pushForce, pushForce);
+			ScaleVector(pushForce, 500.0 * (1.0 - (distance / explosionRadius)));
+			pushForce[2] = 200.0;
+			
+			TeleportEntity(i, NULL_VECTOR, NULL_VECTOR, pushForce);
 		}
 	}
+}
+
+/**
+ * Create visual effects around the explosion point
+ */
+void CreateVisualEffects(const float pos[3])
+{
+	// Create beam ring effect instead of glow sprites
+	if (g_iSpriteBeam > 0)
+	{
+		int color[4] = {255, 100, 0, 255};
+		TE_SetupBeamRingPoint(pos, 0.0, 100.0, g_iSpriteBeam, g_iSpriteHalo, 0, 15, 0.5, 10.0, 0.0, color, 10, 0);
+		TE_SendToAll();
+	}
+	
+	// Create explosion particles
+	if (g_iSpriteHalo > 0)
+	{
+		TE_SetupExplosion(pos, g_iSpriteHalo, 5.0, 1, 0, 100, 0);
+		TE_SendToAll();
+	}
+}
+
+/**
+ * Create a beacon effect on the ground
+ */
+void CreateGroundBeacon(const float pos[3])
+{
+	float groundPos[3];
+	groundPos[0] = pos[0];
+	groundPos[1] = pos[1];
+	groundPos[2] = pos[2] - 30.0;
+	
+	char sBuffer[64];
+	int iEnt = CreateEntityByName("light_dynamic");
+	if(iEnt != INVALID_ENT_REFERENCE)
+	{
+		Format(sBuffer, sizeof(sBuffer), "explode_beacon_%f_%f", groundPos[0], groundPos[1]);
+		DispatchKeyValue(iEnt,"targetname", sBuffer);
+		Format(sBuffer, sizeof(sBuffer), "%f %f %f", groundPos[0], groundPos[1], groundPos[2]);
+		DispatchKeyValue(iEnt, "origin", sBuffer);
+		DispatchKeyValue(iEnt, "angles", "-90 0 0");
+		DispatchKeyValue(iEnt, "_light", "255 100 0 200");
+		DispatchKeyValue(iEnt, "pitch","-90");
+		DispatchKeyValue(iEnt, "distance","256");
+		DispatchKeyValue(iEnt, "spotlight_radius","128");
+		DispatchKeyValue(iEnt, "brightness","4");
+		DispatchKeyValue(iEnt, "style","6");
+		DispatchKeyValue(iEnt, "spawnflags","1");
+		DispatchSpawn(iEnt);
+		AcceptEntityInput(iEnt, "DisableShadow");
+		
+		char sAddOutput[64];
+		Format(sAddOutput, sizeof(sAddOutput), "OnUser1 !self:kill::3.0:1");
+		SetVariantString(sAddOutput);
+		AcceptEntityInput(iEnt, "AddOutput");
+		AcceptEntityInput(iEnt, "FireUser1");
+	}
+	
+	int color[4] = {255, 100, 0, 255};
+	TE_SetupBeamRingPoint(groundPos, 0.0, 200.0, g_iSpriteBeam, g_iSpriteHalo, 0, 10, 3.0, 5.0, 0.0, color, 10, 0);
+	TE_SendToAll();
 }
 
 /**
