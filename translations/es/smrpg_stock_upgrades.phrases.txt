@@ -49,4 +49,24 @@
 	{
 		"es"			"Denegación"
 	}
+
+	"explodeshotgun"
+	{
+		"es"			"Escopeta Explosiva"
+	}
+	
+	"explodeshotgun description"
+	{
+		"es"			"Probabilidad de crear balas explosivas al disparar con una escopeta."
+	}
+	
+	"fireballshotgun"
+	{
+		"es"			"Bola de Fuego con Escopeta"
+	}
+	
+	"fireballshotgun description"
+	{
+		"es"			"Probabilidad de crear efecto de bola de fuego al disparar con una escopeta."
+	}
 }

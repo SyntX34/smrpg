@@ -329,4 +329,24 @@
 	{
 		"de"			"Gibt dir die Chance deine Position mit deinem Angreifer zu tauschen."
 	}
+
+	"explodeshotgun"
+	{
+		"de"			"Schrotflinte explodieren"
+	}
+	
+	"explodeshotgun description"
+	{
+		"de"			"Chance, explodierende Kugeln zu erzeugen, wenn du mit einer Schrotflinte schießt."
+	}
+	
+	"fireballshotgun"
+	{
+		"de"			"Feuerball-Schrotflinte"
+	}
+	
+	"fireballshotgun description"
+	{
+		"de"			"Chance, einen Feuerball-Effekt zu erzeugen, wenn du mit einer Schrotflinte schießt."
+	}
 }

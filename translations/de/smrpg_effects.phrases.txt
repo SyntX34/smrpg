@@ -1,0 +1,5 @@
+"Phrases"
+{
+	// This file is intentionally left empty as the smrpg_effects plugin doesn't directly use any phrases.
+	// All phrases used by effects are defined in their respective upgrade plugins.
+}

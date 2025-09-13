@@ -1,0 +1,82 @@
+"Phrases"
+{
+	"Import player level and experience from THC RPG"
+	{
+		"de"			"Spielerlevel und -erfahrung aus THC RPG importieren. Verwendung: sm_importrpgdb [Mindestlevel]"
+	}
+	
+	"Minimum level has to be greater than 0"
+	{
+		"de"			"Das Mindestlevel muss größer als 0 sein."
+	}
+	
+	"Error finding smrpg_credits_start convar"
+	{
+		"de"			"Fehler beim Finden der smrpg_credits_start Convar. Ist SM:RPG geladen?"
+	}
+	
+	"Error finding smrpg_credits_inc convar"
+	{
+		"de"			"Fehler beim Finden der smrpg_credits_inc Convar. Ist SM:RPG geladen?"
+	}
+	
+	"Error connecting to SM:RPG database"
+	{
+		// 1: Error message
+		"#format"	"{1:s}"
+		"de"			"Fehler beim Verbinden mit der SM:RPG-Datenbank: {1}"
+	}
+	
+	"There are already player entries in your SM:RPG database"
+	{
+		// 1: Number of player entries
+		"#format"	"{1:d}"
+		"de"			"Es gibt bereits {1} Spieler-Einträge in Ihrer SM:RPG-Datenbank. Sie müssen die Level in eine leere Datenbank importieren. Bitte bereinigen Sie zuerst die SM:RPG-Datenbank und starten Sie den Server mit smrpg_save_data 0."
+	}
+	
+	"Error connecting to thc_rpg database"
+	{
+		// 1: Error message
+		"#format"	"{1:s}"
+		"de"			"Fehler beim Verbinden mit der thc_rpg-Datenbank: {1}"
+	}
+	
+	"Error fetching player count from thc_rpg database"
+	{
+		// 1: Error message
+		"#format"	"{1:s}"
+		"de"			"Fehler beim Abrufen der Spieleranzahl aus der thc_rpg-Datenbank: {1}"
+	}
+	
+	"Going to import players with at least level"
+	{
+		// 1: Number of players
+		// 2: Minimum level
+		"#format"	"{1:d},{2:d}"
+		"de"			"Importiere {1} Spieler mit mindestens Level {2} ..."
+	}
+	
+	"has a negative experience of"
+	{
+		// 1: Player name
+		// 2: Experience amount
+		"#format"	"{1:s},{2:d}"
+		"de"			"{1} hat eine negative Erfahrung von {2}. Wird auf 0 zurückgesetzt."
+	}
+	
+	"Can't import"
+	{
+		// 1: Player name
+		// 2: Steam ID
+		"#format"	"{1:s},{2:s}"
+		"de"			"Kann {1} nicht importieren. \"{2}\" ist keine gültige SteamID."
+	}
+	
+	"Error fetching player list chunk from thc_rpg database"
+	{
+		// 1: Chunk number
+		// 2: Error message
+		"#format"	"{1:d},{2:s}"
+		"de"			"Fehler beim Abrufen des Spielerlisten-Teilstücks {1} aus der thc_rpg-Datenbank: {2}"
+	}
+}

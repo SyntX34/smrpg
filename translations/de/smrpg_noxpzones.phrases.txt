@@ -1,0 +1,25 @@
+"Phrases"
+{
+	"Manage no XP zones"
+	{
+		"de"			"Keine-XP-Zonen verwalten"
+	}
+	
+	"Listing players that are in a restricted zone"
+	{
+		"de"			"Auflistung der Spieler, die sich in einer eingeschränkten Zone befinden:"
+	}
+	
+	"Player is in zones"
+	{
+		// 1: Name of the player
+		// 2: Number of zones
+		"#format"	"{1:N},{2:d}"
+		"de"			"{1} befindet sich in {2} Zonen."
+	}
+	
+	"SM:RPG > This command is ingame only"
+	{
+		"de"			"SM:RPG > Dieser Befehl ist nur im Spiel verfügbar."
+	}
+}

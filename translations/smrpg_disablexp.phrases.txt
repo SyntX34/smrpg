@@ -1,0 +1,49 @@
+"Phrases"
+{
+	"Toggle experience"
+	{
+		"en"			"Toggle experience"
+	}
+	
+	"Toggle experience on.."
+	{
+		"en"			"Toggle experience on.."
+	}
+	
+	"Disabled experience for"
+	{
+		// 1: Name of the player
+		"#format"	"{1:N}"
+		"en"			"Disabled experience for {1}. No more experience for that one."
+	}
+	
+	"Enabled experience for"
+	{
+		// 1: Name of the player
+		"#format"	"{1:N}"
+		"en"			"Enabled experience for {1} again."
+	}
+	
+	"Experience gaining has been toggled"
+	{
+		// 1: Target name
+		// 2: Number of players
+		"#format"	"{1:t},{2:d}"
+		"en"			"Experience gaining has been toggled on {1} ({2} players)."
+	}
+	
+	"Experience disabled"
+	{
+		"en"			"Disabled"
+	}
+	
+	"Experience enabled"
+	{
+		"en"			"Enabled"
+	}
+	
+	"SM:RPG > Toggle experience gaining for a player"
+	{
+		"en"			"SM:RPG > Toggle experience gaining for a player. Usage sm_toggleexp <name|steamid|#userid>"
+	}
+}

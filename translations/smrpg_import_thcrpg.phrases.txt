@@ -1,0 +1,82 @@
+"Phrases"
+{
+	"Import player level and experience from THC RPG"
+	{
+		"en"			"Import player level and experience from THC RPG. Usage: sm_importrpgdb [minlevel]"
+	}
+	
+	"Minimum level has to be greater than 0"
+	{
+		"en"			"Minimum level has to be greater than 0."
+	}
+	
+	"Error finding smrpg_credits_start convar"
+	{
+		"en"			"Error finding smrpg_credits_start convar. SM:RPG loaded?"
+	}
+	
+	"Error finding smrpg_credits_inc convar"
+	{
+		"en"			"Error finding smrpg_credits_inc convar. SM:RPG loaded?"
+	}
+	
+	"Error connecting to SM:RPG database"
+	{
+		// 1: Error message
+		"#format"	"{1:s}"
+		"en"			"Error connecting to SM:RPG database: {1}"
+	}
+	
+	"There are already player entries in your SM:RPG database"
+	{
+		// 1: Number of player entries
+		"#format"	"{1:d}"
+		"en"			"There are already {1} player entries in your SM:RPG database. You have to import the levels into an empty database. Please clean the SM:RPG database first and start the server with smrpg_save_data 0."
+	}
+	
+	"Error connecting to thc_rpg database"
+	{
+		// 1: Error message
+		"#format"	"{1:s}"
+		"en"			"Error connecting to thc_rpg database: {1}"
+	}
+	
+	"Error fetching player count from thc_rpg database"
+	{
+		// 1: Error message
+		"#format"	"{1:s}"
+		"en"			"Error fetching player count from thc_rpg database: {1}"
+	}
+	
+	"Going to import players with at least level"
+	{
+		// 1: Number of players
+		// 2: Minimum level
+		"#format"	"{1:d},{2:d}"
+		"en"			"Going to import {1} players with at least level {2} ..."
+	}
+	
+	"has a negative experience of"
+	{
+		// 1: Player name
+		// 2: Experience amount
+		"#format"	"{1:s},{2:d}"
+		"en"			"{1} has a negative experience of {2}. Resetting to 0."
+	}
+	
+	"Can't import"
+	{
+		// 1: Player name
+		// 2: Steam ID
+		"#format"	"{1:s},{2:s}"
+		"en"			"Can't import {1}. \"{2}\" is not a valid steamid."
+	}
+	
+	"Error fetching player list chunk from thc_rpg database"
+	{
+		// 1: Chunk number
+		// 2: Error message
+		"#format"	"{1:d},{2:s}"
+		"en"			"Error fetching player list chunk {1} from thc_rpg database: {2}"
+	}
+}

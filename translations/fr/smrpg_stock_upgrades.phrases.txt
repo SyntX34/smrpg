@@ -269,4 +269,24 @@
 	{
 		"fr"	"Vous repoussez vos ennemis avec vos balles."
 	}
+
+	"explodeshotgun"
+	{
+		"fr"	"Fusil à pompe explosif"
+	}
+	
+	"explodeshotgun description"
+	{
+		"fr"	"Chance de créer des balles explosives en tirant avec un fusil à pompe."
+	}
+	
+	"fireballshotgun"
+	{
+		"fr"	"Boule de feu au fusil à pompe"
+	}
+	
+	"fireballshotgun description"
+	{
+		"fr"	"Chance de créer un effet de boule de feu en tirant avec un fusil à pompe."
+	}
 }

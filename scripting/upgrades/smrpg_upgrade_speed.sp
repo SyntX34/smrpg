@@ -6,6 +6,7 @@
 #pragma newdecls required
 #include <smrpg>
 #include <smrpg_effects>
+#include <multicolors>
 
 #define UPGRADE_SHORTNAME "speed"
 
@@ -36,17 +37,28 @@ public void OnPluginStart()
 
 	Handle hGameConf = LoadGameConfigFile("smrpg_speed.games");
 	if(hGameConf == null)
+	{
 		SetFailState("Gamedata file smrpg_speed.games.txt is missing.");
-	
+	}
+
 	int iOffset = GameConfGetOffset(hGameConf, "GetPlayerMaxSpeed");
 	delete hGameConf;
-	
+
 	if(iOffset == -1)
+	{
 		SetFailState("Gamedata is missing the \"GetPlayerMaxSpeed\" offset.");
-	
+	}
+
 	g_hGetSpeed = DHookCreate(iOffset, HookType_Entity, ReturnType_Float, ThisPointer_CBaseEntity, Hook_GetPlayerMaxSpeedPost);
-	if(g_hGetSpeed == null)
-		SetFailState("Failed to create hook on \"GetPlayerMaxSpeed\".");
+	if (g_hGetSpeed == null)
+	{
+		LogError("[SMRPG Speed] DHook creation failed: GetPlayerMaxSpeed is not found in gamedata.");
+		SetFailState("Gamedata file might be outdated or incorrect.");
+	}
+	else
+	{
+		LogMessage("[SMRPG Speed] Successfully created DHook for GetPlayerMaxSpeed.");
+	}
 	
 	// Account for late loading
 	for(int i=1;i<=MaxClients;i++)
@@ -54,6 +66,8 @@ public void OnPluginStart()
 		if(IsClientInGame(i))
 			OnClientPutInServer(i);
 	}
+
+	HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
 }
 
 public void OnPluginEnd()
@@ -64,41 +78,55 @@ public void OnPluginEnd()
 
 public void OnAllPluginsLoaded()
 {
-	OnLibraryAdded("smrpg");
+	if (LibraryExists("smrpg"))
+		OnLibraryAdded("smrpg");
 }
+
 
 public void OnLibraryAdded(const char[] name)
 {
-	// Register this upgrade in SM:RPG
-	if(StrEqual(name, "smrpg"))
-	{
-		SMRPG_RegisterUpgradeType("Speed+", UPGRADE_SHORTNAME, "Increase your average movement speed.", 0, true, 6, 10, 10);
-		SMRPG_SetUpgradeBuySellCallback(UPGRADE_SHORTNAME, SMRPG_BuySell);
-		SMRPG_SetUpgradeTranslationCallback(UPGRADE_SHORTNAME, SMRPG_TranslateUpgrade);
-		g_hCVPercent = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_speed_percent", "0.05", "Percentage of speed added to player (multiplied by level)", _, true, 0.0, true, 1.0);
-		g_hCVSpeedMethod = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_speed_method", "1", "Which method for default movement speed improvement should be applied? 0: LaggedMovementValue, speeds up jumping and falling too (old way); 1: MaxSpeed, only increases the maximum walking speed on the ground (new way)", _, true, 0.0, true, 1.0);
-		g_SpeedMethod = view_as<SpeedMethod>(g_hCVSpeedMethod.IntValue);
-		g_hCVSpeedMethod.AddChangeHook(ConVar_OnSpeedMethodChanged);
-	}
-	else if(StrEqual(name, "smrpg_effects"))
-	{
-		if(g_SpeedMethod == SM_LaggedMovementValue)
-		{
-			for(int i=1;i<=MaxClients;i++)
-			{
-				if (!IsClientInGame(i))
-					continue;
+    if(StrEqual(name, "smrpg"))
+    {
+        SMRPG_RegisterUpgradeType("Speed+", UPGRADE_SHORTNAME, "Increase your average movement speed.", 0, true, 6, 10, 10);
+        SMRPG_SetUpgradeBuySellCallback(UPGRADE_SHORTNAME, SMRPG_BuySell);
+        SMRPG_SetUpgradeTranslationCallback(UPGRADE_SHORTNAME, SMRPG_TranslateUpgrade);
+        g_hCVPercent = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_speed_percent", "0.05", "Percentage of speed added to player (multiplied by level)", _, true, 0.0, true, 1.0);
+        g_hCVSpeedMethod = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_speed_method", "1", "Which method for default movement speed improvement should be applied? 0: LaggedMovementValue, speeds up jumping and falling too (old way); 1: MaxSpeed, only increases the maximum walking speed on the ground (new way)", _, true, 0.0, true, 1.0);
+        g_SpeedMethod = view_as<SpeedMethod>(g_hCVSpeedMethod.IntValue);
+        g_hCVSpeedMethod.AddChangeHook(ConVar_OnSpeedMethodChanged);
 
-				ApplyLaggedMovementSpeedChange(i);
-			}
-		}
-	}
+        LogMessage("[SMRPG Speed] Successfully registered upgrade: %s", UPGRADE_SHORTNAME);
+
+        // **FIX: Reapply speed for clients who were delayed**
+        for (int i = 1; i <= MaxClients; i++)
+        {
+            if (IsClientInGame(i))
+            {
+                LogMessage("[SMRPG Speed] Reapplying speed setup for %N after delayed registration.", i);
+                OnClientPutInServer(i);
+            }
+        }
+    }
 }
+
 
 public void OnClientPutInServer(int client)
 {
-	if (g_SpeedMethod == SM_MaxSpeed)
-		g_iClientHookId[client] = DHookEntity(g_hGetSpeed, true, client);
+    if (!SMRPG_UpgradeExists(UPGRADE_SHORTNAME))
+    {
+        LogMessage("[SMRPG Speed] Delaying speed setup for %N: Upgrade not registered yet!", client);
+        return;
+    }
+
+    if (g_SpeedMethod == SM_MaxSpeed)
+    {
+        g_iClientHookId[client] = DHookEntity(g_hGetSpeed, true, client);
+        LogMessage("[SMRPG Speed] Hook applied to client %N (Hook ID: %d)", client, g_iClientHookId[client]);
+    }
+    else
+    {
+        ApplyLaggedMovementSpeedChange(client);
+    }
 }
 
 public void OnClientDisconnect_Post(int client)
@@ -201,14 +229,54 @@ void ApplyLaggedMovementSpeedChange(int client)
  */
 public MRESReturn Hook_GetPlayerMaxSpeedPost(int client, Handle hReturn)
 {
-	float fMaxSpeedIncrease = GetClientSpeedIncrease(client);
-	if (fMaxSpeedIncrease <= 0.0)
-		return MRES_Ignored;
+    if (!IsClientInGame(client))
+        return MRES_Ignored;
 
-	float fCurrentMaxSpeed = DHookGetReturn(hReturn);
-	// Increase maxspeed depending on level
-	fMaxSpeedIncrease *= fCurrentMaxSpeed;
-	
-	DHookSetReturn(hReturn, fCurrentMaxSpeed+fMaxSpeedIncrease);
-	return MRES_Override;
+    float fCurrentMaxSpeed = DHookGetReturn(hReturn);
+    float fMaxSpeedIncrease = GetClientSpeedIncrease(client);
+
+    if (fMaxSpeedIncrease <= 0.0)
+        return MRES_Ignored;
+
+    float fNewMaxSpeed = fCurrentMaxSpeed + (fCurrentMaxSpeed * fMaxSpeedIncrease);
+    
+    // Log values to verify the hook is working
+    LogMessage("Client %N: Old Speed = %.2f, New Speed = %.2f", client, fCurrentMaxSpeed, fNewMaxSpeed);
+	CPrintToChatAll("{green}Client {aqua}%N: {green}Old Speed = {lime}%.2f, {green}New Speed = {lime}%.2f", client, fCurrentMaxSpeed, fNewMaxSpeed);
+    
+    DHookSetReturn(hReturn, fNewMaxSpeed);
+    return MRES_Override;
+}
+
+public void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)
+{
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if (!client || !IsClientInGame(client))
+        return;
+
+    if (!SMRPG_UpgradeExists(UPGRADE_SHORTNAME))
+    {
+        LogMessage("[SMRPG Speed] Skipping speed reapply for %N (Upgrade not ready yet)", client);
+        return;
+    }
+
+    CreateTimer(0.5, Timer_ReapplySpeed, client, TIMER_FLAG_NO_MAPCHANGE);
+}
+
+
+public Action Timer_ReapplySpeed(Handle timer, any client)
+{
+    if (!IsClientInGame(client))
+        return Plugin_Stop;
+
+    if (g_SpeedMethod == SM_MaxSpeed)
+    {
+        g_iClientHookId[client] = DHookEntity(g_hGetSpeed, true, client);
+    }
+    else
+    {
+        ApplyLaggedMovementSpeedChange(client);
+    }
+
+    return Plugin_Continue;
 }

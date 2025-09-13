@@ -49,4 +49,24 @@
 	{
 		"it"			"Annulla"
 	}
+
+	"explodeshotgun"
+	{
+		"it"			"Fucile a pompa esplosivo"
+	}
+	
+	"explodeshotgun description"
+	{
+		"it"			"Probabilità di creare proiettili esplosivi quando si spara con un fucile a pompa."
+	}
+	
+	"fireballshotgun"
+	{
+		"it"			"Palla di fuoco fucile a pompa"
+	}
+	
+	"fireballshotgun description"
+	{
+		"it"			"Probabilità di creare un effetto palla di fuoco quando si spara con un fucile a pompa."
+	}
 }

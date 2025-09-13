@@ -1,0 +1,49 @@
+"Phrases"
+{
+	"Toggle experience"
+	{
+		"de"			"Erfahrung umschalten"
+	}
+	
+	"Toggle experience on.."
+	{
+		"de"			"Erfahrung umschalten für.."
+	}
+	
+	"Disabled experience for"
+	{
+		// 1: Name of the player
+		"#format"	"{1:N}"
+		"de"			"Erfahrung deaktiviert für {1}. Keine weitere Erfahrung für diesen Spieler."
+	}
+	
+	"Enabled experience for"
+	{
+		// 1: Name of the player
+		"#format"	"{1:N}"
+		"de"			"Erfahrung wieder aktiviert für {1}."
+	}
+	
+	"Experience gaining has been toggled"
+	{
+		// 1: Target name
+		// 2: Number of players
+		"#format"	"{1:t},{2:d}"
+		"de"			"Erfahrungsverdienen wurde umgeschaltet für {1} ({2} Spieler)."
+	}
+	
+	"Experience disabled"
+	{
+		"de"			"Deaktiviert"
+	}
+	
+	"Experience enabled"
+	{
+		"de"			"Aktiviert"
+	}
+	
+	"SM:RPG > Toggle experience gaining for a player"
+	{
+		"de"			"SM:RPG > Erfahrungsverdienen für einen Spieler umschalten. Verwendung: sm_toggleexp <Name|SteamID|#UserID>"
+	}
+}

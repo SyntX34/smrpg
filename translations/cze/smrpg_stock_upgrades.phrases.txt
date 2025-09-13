@@ -49,4 +49,24 @@
 	{
 		"cze"			"Zpomalování pistolí"
 	}
+
+	"explodeshotgun"
+	{
+		"cze"			"Výbuchová brokovnice"
+	}
+	
+	"explodeshotgun description"
+	{
+		"cze"			"Šance vytvořit výbušné kulky při střelbě z brokovnice."
+	}
+	
+	"fireballshotgun"
+	{
+		"cze"			"Ohnivá brokovnice"
+	}
+	
+	"fireballshotgun description"
+	{
+		"cze"			"Šance vytvořit ohnivý efekt při střelbě z brokovnice."
+	}
 }

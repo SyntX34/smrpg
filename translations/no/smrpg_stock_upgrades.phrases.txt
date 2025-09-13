@@ -49,4 +49,24 @@
 	{
 		"no"			"Fornektelse"
 	}
+
+	"explodeshotgun"
+	{
+		"no"			"Eksplosiv Hagle"
+	}
+	
+	"explodeshotgun description"
+	{
+		"no"			"Sjanse for å lage eksplosive kuler når du skyter med hagle."
+	}
+	
+	"fireballshotgun"
+	{
+		"no"			"Ildkule Hagle"
+	}
+	
+	"fireballshotgun description"
+	{
+		"no"			"Sjanse for å lage ildkule-effekt når du skyter med hagle."
+	}
 }

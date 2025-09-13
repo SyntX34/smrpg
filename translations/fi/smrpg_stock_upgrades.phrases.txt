@@ -54,4 +54,24 @@
 	{
 		"fi"			"Keep your weapons the next time you spawn after you've died."
 	}
+
+	"explodeshotgun"
+	{
+		"fi"			"Räjähdyshaulikko"
+	}
+	
+	"explodeshotgun description"
+	{
+		"fi"			"Mahdollisuus luoda räjähtäviä luoteja ammuttaessa haulikolla."
+	}
+	
+	"fireballshotgun"
+	{
+		"fi"			"Tulipallo-haulikko"
+	}
+	
+	"fireballshotgun description"
+	{
+		"fi"			"Mahdollisuus luoda tulipalloefekti ammuttaessa haulikolla."
+	}
 }

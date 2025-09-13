@@ -329,4 +329,24 @@
 	{
 		"en"			"Gives you the chance to swap positions with your attacker."
 	}
+
+	"explodeshotgun"
+	{
+		"en"			"Explode Shotgun"
+	}
+	
+	"explodeshotgun description"
+	{
+		"en"			"Chance to create explosive bullets when shooting with a shotgun."
+	}
+	
+	"fireballshotgun"
+	{
+		"en"			"Fireball Shotgun"
+	}
+	
+	"fireballshotgun description"
+	{
+		"en"			"Chance to create fireball effect when shooting with a shotgun."
+	}
 }

@@ -268,4 +268,24 @@
 	{
 		"hu"			"Ellöki az ellenfeleidet ha meglövöd"
 	}
+
+	"explodeshotgun"
+	{
+		"hu"			"Robbanó sörétes puska"
+	}
+	
+	"explodeshotgun description"
+	{
+		"hu"			"Esély arra, hogy robbanó golyókat hozz létre sörétes puskával való lövés során."
+	}
+	
+	"fireballshotgun"
+	{
+		"hu"			"Tűzgolyó sörétes puska"
+	}
+	
+	"fireballshotgun description"
+	{
+		"hu"			"Esély arra, hogy tűzgolyó effektet hozz létre sörétes puskával való lövés során."
+	}
 }
