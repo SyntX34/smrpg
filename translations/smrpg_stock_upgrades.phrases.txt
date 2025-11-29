@@ -349,4 +349,54 @@
 	{
 		"en"			"Chance to create fireball effect when shooting with a shotgun."
 	}
+
+	"timewarp"
+    {
+        "en"			"Time Warp"
+    }
+
+    "timewarp description"
+    {
+        "en"			"Slows down time for nearby enemies in a radius."
+    }
+
+    "shadowstep"
+    {
+        "en"			"Shadow Step"
+    }
+
+    "shadowstep description"
+    {
+        "en"			"Teleport behind nearby enemies."
+    }
+
+    "vortex"
+    {
+        "en"			"Vortex"
+    }
+
+    "vortex description"
+    {
+        "en"			"Create a vortex that pulls enemies toward center and damages them."
+    }
+
+    "gravitywell"
+    {
+        "en"			"Gravity Well"
+    }
+
+    "gravitywell description"
+    {
+        "en"			"Create a gravity well that attracts enemies to a point."
+    }
+
+    "elementalmastery"
+    {
+        "en"			"Elemental Mastery"
+    }
+
+    "elementalmastery description"
+    {
+        "en"			"Master different elemental powers to enhance your attacks."
+    }
 }

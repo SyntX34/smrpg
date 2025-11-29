@@ -349,4 +349,54 @@
 	{
 		"de"			"Chance, einen Feuerball-Effekt zu erzeugen, wenn du mit einer Schrotflinte schießt."
 	}
+
+	"timewarp"
+	{
+		"de"            "Zeitverzerrung"
+	}
+
+	"timewarp description"
+	{
+		"de"            "Verlangsamt die Zeit für nahe Feinde innerhalb eines Radius."
+	}
+
+	"shadowstep"
+	{
+		"de"            "Schattenschritt"
+	}
+
+	"shadowstep description"
+	{
+		"de"            "Teleportiert sich hinter nahe Feinde."
+	}
+
+	"vortex"
+	{
+		"de"            "Wirbel"
+	}
+
+	"vortex description"
+	{
+		"de"            "Erzeugt einen Wirbel, der Feinde zur Mitte zieht und ihnen Schaden zufügt."
+	}
+
+	"gravitywell"
+	{
+		"de"            "Gravitationsbrunnen"
+	}
+
+	"gravitywell description"
+	{
+		"de"            "Erzeugt einen Gravitationsbrunnen, der Feinde zu einem Punkt zieht."
+	}
+
+	"elementalmastery"
+	{
+		"de"            "Elementarmeisterschaft"
+	}
+
+	"elementalmastery description"
+	{
+		"de"            "Meistert verschiedene Elementarkräfte, um eure Angriffe zu verstärken."
+	}
 }

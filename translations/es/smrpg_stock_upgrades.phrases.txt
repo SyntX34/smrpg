@@ -69,4 +69,55 @@
 	{
 		"es"			"Probabilidad de crear efecto de bola de fuego al disparar con una escopeta."
 	}
+
+	"timewarp"
+	{
+		"es"            "Distorsión Temporal"
+	}
+
+	"timewarp description"
+	{
+		"es"            "Ralentiza el tiempo para los enemigos cercanos dentro de un radio."
+	}
+
+	"shadowstep"
+	{
+		"es"            "Paso Sombrío"
+	}
+
+	"shadowstep description"
+	{
+		"es"            "Te teletransporta detrás de los enemigos cercanos."
+	}
+
+	"vortex"
+	{
+		"es"            "Vórtice"
+	}
+
+	"vortex description"
+	{
+		"es"            "Crea un vórtice que atrae a los enemigos hacia el centro y les causa daño."
+	}
+
+	"gravitywell"
+	{
+		"es"            "Pozo de Gravedad"
+	}
+
+	"gravitywell description"
+	{
+		"es"            "Crea un pozo gravitacional que atrae a los enemigos hacia un punto."
+	}
+
+	"elementalmastery"
+	{
+		"es"            "Maestría Elemental"
+	}
+
+	"elementalmastery description"
+	{
+		"es"            "Domina distintos poderes elementales para potenciar tus ataques."
+	}
+
 }

@@ -69,4 +69,55 @@
 	{
 		"no"			"Sjanse for å lage ildkule-effekt når du skyter med hagle."
 	}
+
+	"timewarp"
+	{
+		"no"            "Tidsforvrengning"
+	}
+
+	"timewarp description"
+	{
+		"no"            "Sakter ned tiden for fiender i nærheten innenfor en radius."
+	}
+
+	"shadowstep"
+	{
+		"no"            "Skyggesteg"
+	}
+
+	"shadowstep description"
+	{
+		"no"            "Teleporterer bak fiender i nærheten."
+	}
+
+	"vortex"
+	{
+		"no"            "Virvel"
+	}
+
+	"vortex description"
+	{
+		"no"            "Skaper en virvel som trekker fiender mot sentrum og påfører skade."
+	}
+
+	"gravitywell"
+	{
+		"no"            "Gravitetsbrønn"
+	}
+
+	"gravitywell description"
+	{
+		"no"            "Skaper en gravitasjonsbrønn som trekker fiender til et punkt."
+	}
+
+	"elementalmastery"
+	{
+		"no"            "Elementmesting"
+	}
+
+	"elementalmastery description"
+	{
+		"no"            "Behersk ulike elementkrefter for å forsterke angrepene dine."
+	}
+
 }

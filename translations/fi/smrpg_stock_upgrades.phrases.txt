@@ -74,4 +74,55 @@
 	{
 		"fi"			"Mahdollisuus luoda tulipalloefekti ammuttaessa haulikolla."
 	}
+
+	"timewarp"
+	{
+		"fi"            "Aikavääristymä"
+	}
+
+	"timewarp description"
+	{
+		"fi"            "Hidastaa ajan kulkua lähellä olevilta vihollisilta tietyllä säteellä."
+	}
+
+	"shadowstep"
+	{
+		"fi"            "Varjoaskel"
+	}
+
+	"shadowstep description"
+	{
+		"fi"            "Teleportoituu lähellä olevien vihollisten taakse."
+	}
+
+	"vortex"
+	{
+		"fi"            "Pyörre"
+	}
+
+	"vortex description"
+	{
+		"fi"            "Luo pyörteen, joka vetää vihollisia kohti keskustaa ja aiheuttaa vahinkoa."
+	}
+
+	"gravitywell"
+	{
+		"fi"            "Painovoimakaivo"
+	}
+
+	"gravitywell description"
+	{
+		"fi"            "Luo painovoimakaivon, joka vetää vihollisia yhteen pisteeseen."
+	}
+
+	"elementalmastery"
+	{
+		"fi"            "Elementtien Hallinta"
+	}
+
+	"elementalmastery description"
+	{
+		"fi"            "Hallitse erilaisia elementaalivoimia vahvistaaksesi hyökkäyksiäsi."
+	}
+
 }

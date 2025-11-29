@@ -289,4 +289,55 @@
 	{
 		"fr"	"Chance de créer un effet de boule de feu en tirant avec un fusil à pompe."
 	}
+
+	"timewarp"
+	{
+		"fr"            "Distorsion Temporelle"
+	}
+
+	"timewarp description"
+	{
+		"fr"            "Ralentit le temps pour les ennemis proches dans un certain rayon."
+	}
+
+	"shadowstep"
+	{
+		"fr"            "Pas de l’Ombre"
+	}
+
+	"shadowstep description"
+	{
+		"fr"            "Se téléporte derrière les ennemis proches."
+	}
+
+	"vortex"
+	{
+		"fr"            "Vortex"
+	}
+
+	"vortex description"
+	{
+		"fr"            "Crée un vortex qui attire les ennemis vers le centre et leur inflige des dégâts."
+	}
+
+	"gravitywell"
+	{
+		"fr"            "Puits de Gravité"
+	}
+
+	"gravitywell description"
+	{
+		"fr"            "Crée un puits gravitationnel qui attire les ennemis vers un point."
+	}
+
+	"elementalmastery"
+	{
+		"fr"            "Maîtrise Élémentaire"
+	}
+
+	"elementalmastery description"
+	{
+		"fr"            "Maîtrisez différentes puissances élémentaires pour renforcer vos attaques."
+	}
+
 }

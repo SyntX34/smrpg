@@ -288,4 +288,55 @@
 	{
 		"hu"			"Esély arra, hogy tűzgolyó effektet hozz létre sörétes puskával való lövés során."
 	}
+
+	"timewarp"
+	{
+		"hu"            "Időtorzulás"
+	}
+
+	"timewarp description"
+	{
+		"hu"            "Lelassítja az időt a közeli ellenségek számára egy bizonyos sugáron belül."
+	}
+
+	"shadowstep"
+	{
+		"hu"            "Árnyéklépés"
+	}
+
+	"shadowstep description"
+	{
+		"hu"            "Az ellenségek mögé teleportál a közelben."
+	}
+
+	"vortex"
+	{
+		"hu"            "Örvény"
+	}
+
+	"vortex description"
+	{
+		"hu"            "Létrehoz egy örvényt, amely a középpont felé húzza az ellenségeket és sebzi őket."
+	}
+
+	"gravitywell"
+	{
+		"hu"            "Gravitációs Kút"
+	}
+
+	"gravitywell description"
+	{
+		"hu"            "Gravitációs kutat hoz létre, amely egy ponthoz vonzza az ellenségeket."
+	}
+
+	"elementalmastery"
+	{
+		"hu"            "Elementális Mesterség"
+	}
+
+	"elementalmastery description"
+	{
+		"hu"            "Különböző elemi erők uralásával erősíted a támadásaidat."
+	}
+
 }

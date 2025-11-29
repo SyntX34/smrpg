@@ -1,0 +1,402 @@
+"Phrases"
+{
+	"regen"
+	{
+		"da"			"HP-regenerering"
+	}
+	
+	"regen description"
+	{
+		"da"			"Gendanner regelmæssigt en bestemt mængde HP."
+	}
+	
+	"health"
+	{
+		"da"			"Sundhed+"
+	}
+	
+	"health description"
+	{
+		"da"			"Øger din maksimale sundhed."
+	}
+	
+	"resup"
+	{
+		"da"			"Ammunition regenerering"
+	}
+	
+	"resup description"
+	{
+		"da"			"Gendanner noget ammunition hver tredje sekund."
+	}
+	
+	"vamp"
+	{
+		"da"			"Vampyr"
+	}
+	
+	"vamp description"
+	{
+		"da"			"Stjæl HP fra spillere, som du skader."
+	}
+	
+	"stealth"
+	{
+		"da"			"Ingen synlighed"
+	}
+	
+	"stealth description"
+	{
+		"da"			"Du bliver gradvist mere usynlig."
+	}
+	
+	"ljump"
+	{
+		"da"			"Lange spring"
+	}
+	
+	"ljump description"
+	{
+		"da"			"Øger din springafstand for hvert hop."
+	}
+	
+	"fnade"
+	{
+		"da"			"Brandgranat"
+	}
+	
+	"fnade description"
+	{
+		"da"			"Tænder spillere på, når du rammer dem med en granat."
+	}
+	
+	"icestab"
+	{
+		"da"			"Isstik"
+	}
+	
+	"icestab description"
+	{
+		"da"			"Fryser din modstander, når du rammer med kniven."
+	}
+	
+	"fpistol"
+	{
+		"da"			"Frostpistol"
+	}
+	
+	"fpistol description"
+	{
+		"da"			"Sænker hastigheden på dine modstandere, når du rammer dem med pistolen."
+	}
+	
+	"denial"
+	{
+		"da"			"Nægtelse"
+	}
+	
+	"denial description"
+	{
+		"da"			"Behold dine våben næste gang du spawner, selvom du døde tidligere."
+	}
+	
+	"impulse"
+	{
+		"da"			"Impuls"
+	}
+	
+	"impulse description"
+	{
+		"da"			"Øger kortvarigt din hastighed, når du tager skade."
+	}
+	
+	"medic"
+	{
+		"da"			"Medic"
+	}
+	
+	"medic description"
+	{
+		"da"			"Healer dine holdkammerater i nærheden."
+	}
+  
+	"speed"
+	{
+		"da"			"Hastighed+"
+	}
+	
+	"speed description"
+	{
+		"da"			"Øger din gennemsnitlige bevægelseshastighed."
+	}
+  
+	"damage"
+	{
+		"da"			"Skade+"
+	}
+  
+	"damage description"
+	{
+		"da"			"Giver dine modstandere lidt ekstra skade, når du rammer dem."
+	}
+	
+	"armorregen"
+	{
+		"da"			"Rustningsregenerering"
+	}
+	
+	"armorregen description"
+	{
+		"da"			"Gendanner regelmæssigt en bestemt mængde rustning."
+	}
+	
+	"clipsize"
+	{
+		"da"			"Forøg magasin"
+	}
+	
+	"clipsize description"
+	{
+		"da"			"Øger kapaciteten på våbenets aktive magasin."
+	}
+	
+	"shrinking"
+	{
+		"da"			"Formindskelse"
+	}
+	
+	"shrinking description"
+	{
+		"da"			"Formindsker din karakter og gør det sværere at ramme dig."
+	}
+	
+	"armorplus"
+	{
+		"da"			"Rustning+"
+	}
+	
+	"armorplus description"
+	{
+		"da"			"Øger din maksimale rustning."
+	}
+	
+	"fastreload"
+	{
+		"da"			"Hurtigere genladning"
+	}
+	
+	"fastreload description"
+	{
+		"da"			"Øger genladehastigheden på dine våben."
+	}
+	
+	"firepistol"
+	{
+		"da"			"Brandpistol"
+	}
+	
+	"firepistol description"
+	{
+		"da"			"Brænd dine modstandere, når du rammer dem med en pistol."
+	}
+	
+	"gravity"
+	{
+		"da"			"Reduceret tyngdekraft"
+	}
+	
+	"gravity description"
+	{
+		"da"			"Reducerer tyngdekraftens effekt på dig, så du kan hoppe højere."
+	}
+	
+	"poisonsmoke"
+	{
+		"da"			"Giftig røg"
+	}
+	
+	"poisonsmoke description"
+	{
+		"da"			"Forgift spillere, der står i røgen fra en røggranat."
+	}
+	
+	"firerate"
+	{
+		"da"			"Øget ildhastighed"
+	}
+	
+	"firerate description"
+	{
+		"da"			"Øger ildhastigheden på dine skydevåben."
+	}
+	
+	"icenade"
+	{
+		"da"			"Isgranat"
+	}
+	
+	"icenade description"
+	{
+		"da"			"Fryser din modstander, når du rammer dem med en granat."
+	}
+	
+	"grenaderesup"
+	{
+		"da"			"Granat regenerering"
+	}
+	
+	"grenaderesup description"
+	{
+		"da"			"Giver dig dine granater tilbage x sekunder efter du har kastet dem."
+	}
+	
+	"antidote"
+	{
+		"da"			"Antidot"
+	}
+	
+	"antidote description"
+	{
+		"da"			"Forkorter varigheden af negative effekter mod dig, som brand eller langsom bevægelse."
+	}
+	
+	"bouncybullets"
+	{
+		"da"			"Spændstige kugler"
+	}
+	
+	"bouncybullets description"
+	{
+		"da"			"Skubber din modstander væk, når du skyder dem."
+	}
+	
+	"falldamage"
+	{
+		"da"			"Reduceret faldskade"
+	}
+	
+	"falldamage description"
+	{
+		"da"			"Reducerer skaden, du tager ved fald fra stor højde."
+	}
+	
+	"armorhelmet"
+	{
+		"da"			"Rustningshjelm"
+	}
+	
+	"armorhelmet description"
+	{
+		"da"			"Du har chance for at få en hjelm ved spawn."
+	}
+	
+	"antiflash"
+	{
+		"da"			"Anti-blænding"
+	}
+	
+	"antiflash description"
+	{
+		"da"			"Reducerer blændingseffekten fra en flashgranat."
+	}
+	
+	"adrenaline"
+	{
+		"da"			"Adrenalin"
+	}
+	
+	"adrenaline description"
+	{
+		"da"			"Øger kortvarigt din hastighed, når du skyder."
+	}
+	
+	"mirrordmg"
+	{
+		"da"			"Skadesrefleks"
+	}
+	
+	"mirrordmg description"
+	{
+		"da"			"Tillader dig at returnere en del af den skade, du tager, til din modstander."
+	}
+	
+	"positionswap"
+	{
+		"da"			"Positionsbytte"
+	}
+	
+	"positionswap description"
+	{
+		"da"			"Give dig chancen for at bytte position med din angriber."
+	}
+
+	"explodeshotgun"
+	{
+		"da"			"Eksploderende haglgevær"
+	}
+	
+	"explodeshotgun description"
+	{
+		"da"			"Chance for at skabe eksploderende kugler, når du skyder med et haglgevær."
+	}
+	
+	"fireballshotgun"
+	{
+		"da"			"Brandkugle-haglgevær"
+	}
+	
+	"fireballshotgun description"
+	{
+		"da"			"Chance for at skabe en brandkugleeffekt, når du skyder med et haglgevær."
+	}
+
+	"timewarp"
+	{
+		"da"            "Tidsforvrængning"
+	}
+
+	"timewarp description"
+	{
+		"da"            "Sænker tiden for nærliggende fjender inden for en radius."
+	}
+
+	"shadowstep"
+	{
+		"da"            "Skyggeskridt"
+	}
+
+	"shadowstep description"
+	{
+		"da"            "Teleportér bag nærliggende fjender."
+	}
+
+	"vortex"
+	{
+		"da"            "Vortex"
+	}
+
+	"vortex description"
+	{
+		"da"            "Skaber en vortex, der trækker fjender mod midten og skader dem."
+	}
+
+	"gravitywell"
+	{
+		"da"            "Gravitationsbrønd"
+	}
+
+	"gravitywell description"
+	{
+		"da"            "Skaber en gravitationsbrønd, der tiltrækker fjender til et punkt."
+	}
+
+	"elementalmastery"
+	{
+		"da"            "Elementarmesterskab"
+	}
+
+	"elementalmastery description"
+	{
+		"da"            "Behersk forskellige elementkræfter for at styrke dine angreb."
+	}
+}

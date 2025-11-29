@@ -160,44 +160,65 @@ public void Hook_OnTakeDamagePost(int victim, int attacker, int inflictor, float
 }
 
 /**
+ * Emit sound to nearby players only
+ */
+void EmitSoundToNearbyPlayers(const float origin[3], const char[] sample, float radius)
+{
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i) || !IsPlayerAlive(i))
+            continue;
+        
+        float clientPos[3];
+        GetClientAbsOrigin(i, clientPos);
+        
+        float distance = GetVectorDistance(origin, clientPos);
+        if (distance <= radius)
+        {
+            EmitSoundToClient(i, sample, SOUND_FROM_WORLD, SNDCHAN_AUTO, SNDLEVEL_NORMAL);
+        }
+    }
+}
+
+/**
  * Create explosion effect
  */
 void CreateExplosionEffect(int victim, int attacker, int level, const float impactPosition[3])
 {
-	EmitAmbientSound("weapons/explode3.wav", impactPosition, SOUND_FROM_WORLD, SNDLEVEL_GUNFIRE);
-	CreateVisualEffects(impactPosition);
-	CreateGroundBeacon(impactPosition);
-	
-	float explosionRadius = g_hCVExplosionRadius.FloatValue;
-	float explosionDamage = g_hCVExplosionDamage.FloatValue * float(level) / 10.0;
-	
-	for(int i = 1; i <= MaxClients; i++)
-	{
-		if(!IsClientInGame(i) || !IsPlayerAlive(i) || i == attacker)
-			continue;
-		
-		if(!SMRPG_IsFFAEnabled() && GetClientTeam(i) == GetClientTeam(attacker))
-			continue;
-		
-		float targetPos[3];
-		GetClientAbsOrigin(i, targetPos);
-		
-		float distance = GetVectorDistance(impactPosition, targetPos);
-		if(distance <= explosionRadius)
-		{
-			float scaledDamage = explosionDamage * (1.0 - (distance / explosionRadius));
-			
-			SDKHooks_TakeDamage(i, attacker, attacker, scaledDamage, DMG_BLAST);
-			
-			float pushForce[3];
-			MakeVectorFromPoints(impactPosition, targetPos, pushForce);
-			NormalizeVector(pushForce, pushForce);
-			ScaleVector(pushForce, 500.0 * (1.0 - (distance / explosionRadius)));
-			pushForce[2] = 200.0;
-			
-			TeleportEntity(i, NULL_VECTOR, NULL_VECTOR, pushForce);
-		}
-	}
+    EmitSoundToNearbyPlayers(impactPosition, "weapons/explode3.wav", 800.0);
+    CreateVisualEffects(impactPosition);
+    CreateGroundBeacon(impactPosition);
+    
+    float explosionRadius = g_hCVExplosionRadius.FloatValue;
+    float explosionDamage = g_hCVExplosionDamage.FloatValue * float(level) / 10.0;
+    
+    for(int i = 1; i <= MaxClients; i++)
+    {
+        if(!IsClientInGame(i) || !IsPlayerAlive(i) || i == attacker)
+            continue;
+        
+        if(!SMRPG_IsFFAEnabled() && GetClientTeam(i) == GetClientTeam(attacker))
+            continue;
+        
+        float targetPos[3];
+        GetClientAbsOrigin(i, targetPos);
+        
+        float distance = GetVectorDistance(impactPosition, targetPos);
+        if(distance <= explosionRadius)
+        {
+            float scaledDamage = explosionDamage * (1.0 - (distance / explosionRadius));
+            
+            SDKHooks_TakeDamage(i, attacker, attacker, scaledDamage, DMG_BLAST);
+            
+            float pushForce[3];
+            MakeVectorFromPoints(impactPosition, targetPos, pushForce);
+            NormalizeVector(pushForce, pushForce);
+            ScaleVector(pushForce, 500.0 * (1.0 - (distance / explosionRadius)));
+            pushForce[2] = 200.0;
+            
+            TeleportEntity(i, NULL_VECTOR, NULL_VECTOR, pushForce);
+        }
+    }
 }
 
 /**

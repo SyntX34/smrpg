@@ -69,4 +69,55 @@
 	{
 		"cze"			"Šance vytvořit ohnivý efekt při střelbě z brokovnice."
 	}
+
+	"timewarp"
+	{
+		"cze"           "Časové Zkreslení"
+	}
+
+	"timewarp description"
+	{
+		"cze"           "Zpomalí čas pro blízké nepřátele v určitém okruhu."
+	}
+
+	"shadowstep"
+	{
+		"cze"           "Stínový Krok"
+	}
+
+	"shadowstep description"
+	{
+		"cze"           "Teleportuje se za blízké nepřátele."
+	}
+
+	"vortex"
+	{
+		"cze"           "Vír"
+	}
+
+	"vortex description"
+	{
+		"cze"           "Vytvoří vír, který přitahuje nepřátele do středu a způsobuje jim poškození."
+	}
+
+	"gravitywell"
+	{
+		"cze"           "Gravitační Jáma"
+	}
+
+	"gravitywell description"
+	{
+		"cze"           "Vytvoří gravitační jámu, která přitahuje nepřátele k jednomu bodu."
+	}
+
+	"elementalmastery"
+	{
+		"cze"           "Mistrovství Elementů"
+	}
+
+	"elementalmastery description"
+	{
+		"cze"           "Ovládněte různé elementární síly a posilte své útoky."
+	}
+
 }

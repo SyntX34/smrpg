@@ -69,4 +69,55 @@
 	{
 		"it"			"Probabilità di creare un effetto palla di fuoco quando si spara con un fucile a pompa."
 	}
+
+	"timewarp"
+	{
+		"it"            "Distorsione Temporale"
+	}
+
+	"timewarp description"
+	{
+		"it"            "Rallenta il tempo per i nemici vicini entro un certo raggio."
+	}
+
+	"shadowstep"
+	{
+		"it"            "Passo d'Ombra"
+	}
+
+	"shadowstep description"
+	{
+		"it"            "Teletrasporta alle spalle dei nemici vicini."
+	}
+
+	"vortex"
+	{
+		"it"            "Vortice"
+	}
+
+	"vortex description"
+	{
+		"it"            "Crea un vortice che attira i nemici verso il centro e li danneggia."
+	}
+
+	"gravitywell"
+	{
+		"it"            "Pozzo di Gravità"
+	}
+
+	"gravitywell description"
+	{
+		"it"            "Crea un pozzo gravitazionale che attira i nemici verso un punto."
+	}
+
+	"elementalmastery"
+	{
+		"it"            "Maestria Elementale"
+	}
+
+	"elementalmastery description"
+	{
+		"it"            "Padroneggia diversi poteri elementali per potenziare i tuoi attacchi."
+	}
+
 }
