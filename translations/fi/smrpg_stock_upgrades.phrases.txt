@@ -124,5 +124,13 @@
 	{
 		"fi"            "Hallitse erilaisia elementaalivoimia vahvistaaksesi hyökkäyksiäsi."
 	}
+	"teleport"
+	{
+		"fi"            "Teleportti"
+	}
 
+	"teleport description"
+	{
+		"fi"            "Teleporttaa sinut pois vihollisten luota, kun otat vahinkoa."
+	}
 }

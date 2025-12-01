@@ -119,5 +119,13 @@
 	{
 		"es"            "Domina distintos poderes elementales para potenciar tus ataques."
 	}
+	"teleport"
+	{
+		"es"            "Teletransporte"
+	}
 
+	"teleport description"
+	{
+		"es"            "Te teletransporta lejos de los enemigos cuando recibes daño."
+	}
 }

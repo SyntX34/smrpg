@@ -119,5 +119,12 @@
 	{
 		"cze"           "Ovládněte různé elementární síly a posilte své útoky."
 	}
-
+	"teleport"
+	{
+		"cze"            "Teleport"
+	}
+	"teleport description"
+	{
+		"cze"            "Teleportuje vás pryč od nepřátel, když utržíte poškození."
+	}
 }

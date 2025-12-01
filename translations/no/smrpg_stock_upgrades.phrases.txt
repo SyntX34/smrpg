@@ -119,5 +119,13 @@
 	{
 		"no"            "Behersk ulike elementkrefter for å forsterke angrepene dine."
 	}
+	"teleport"
+	{
+		"no"            "Teleport"
+	}
 
+	"teleport description"
+	{
+		"no"            "Teleporterer deg bort fra fiender når du tar skade."
+	}
 }

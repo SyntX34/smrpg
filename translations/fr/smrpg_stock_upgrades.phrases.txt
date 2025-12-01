@@ -339,5 +339,13 @@
 	{
 		"fr"            "Maîtrisez différentes puissances élémentaires pour renforcer vos attaques."
 	}
+	"teleport"
+	{
+		"fr"            "Téléportation"
+	}
 
+	"teleport description"
+	{
+		"fr"            "Vous téléporte loin des ennemis lorsque vous subissez des dégâts."
+	}
 }

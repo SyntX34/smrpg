@@ -399,4 +399,12 @@
 	{
 		"da"            "Behersk forskellige elementkræfter for at styrke dine angreb."
 	}
+	"teleport"
+	{
+		"da"            "Teleport"
+	}
+	"teleport description"
+	{
+		"da"            "Teleporterer dig væk fra fjender, når du tager skade."
+	}
 }

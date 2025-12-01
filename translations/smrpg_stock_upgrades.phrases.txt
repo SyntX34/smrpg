@@ -399,4 +399,14 @@
     {
         "en"			"Master different elemental powers to enhance your attacks."
     }
+    
+    "teleport"
+    {
+        "en"			"Teleport"
+    }
+    
+    "teleport description"
+    {
+        "en"			"Teleports you away from enemies when taking damage."
+    }
 }

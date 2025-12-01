@@ -338,5 +338,13 @@
 	{
 		"hu"            "Különböző elemi erők uralásával erősíted a támadásaidat."
 	}
+	"teleport"
+	{
+		"hu"            "Teleport"
+	}
 
+	"teleport description"
+	{
+		"hu"            "Sebzés elszenvedésekor elteleportál az ellenségektől."
+	}
 }

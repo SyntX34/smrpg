@@ -119,5 +119,13 @@
 	{
 		"it"            "Padroneggia diversi poteri elementali per potenziare i tuoi attacchi."
 	}
+	"teleport"
+	{
+		"it"            "Teleport"
+	}
 
+	"teleport description"
+	{
+		"it"            "Seleziona un nemico vicino e teletrasportati lontano da essi."
+	}
 }
