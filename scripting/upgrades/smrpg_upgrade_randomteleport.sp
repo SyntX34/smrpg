@@ -11,11 +11,12 @@
 ConVar g_hCVChance;
 ConVar g_hCVMinDistance;
 ConVar g_hCVMaxDistance;
+ConVar g_hCVZOffset;
 
 public Plugin myinfo = 
 {
     name = "SM:RPG Upgrade > Teleport",
-    author = "+SyntX",
+    author = "zombiesharp",
     description = "Teleports you away from enemies when taking damage.",
     version = SMRPG_VERSION,
     url = "https://www.wcfan.de/"
@@ -25,8 +26,7 @@ public void OnPluginStart()
 {
     LoadTranslations("smrpg_stock_upgrades.phrases");
     
-    // Account for late loading
-    for(int i=1;i<=MaxClients;i++)
+    for(int i = 1; i <= MaxClients; i++)
     {
         if(IsClientInGame(i))
             OnClientPutInServer(i);
@@ -46,38 +46,27 @@ public void OnAllPluginsLoaded()
 
 public void OnLibraryAdded(const char[] name)
 {
-    // Register this upgrade in SM:RPG
     if(StrEqual(name, "smrpg"))
     {
-        // Register the upgrade type.
         SMRPG_RegisterUpgradeType("Teleport", UPGRADE_SHORTNAME, "Teleports you away from enemies when taking damage.", 0, true, 5, 20, 15);
-
-        // Register translation callback
         SMRPG_SetUpgradeTranslationCallback(UPGRADE_SHORTNAME, SMRPG_TranslateUpgrade);
         
-        // Create convars
-        g_hCVChance = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_teleport_chance", "0.1", "The chance that the player teleports when taking damage (multiplied by level).", _, true, 0.0, true, 1.0);
-        g_hCVMinDistance = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_teleport_min_distance", "200.0", "Minimum teleport distance from enemies.", _, true, 50.0);
-        g_hCVMaxDistance = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_teleport_max_distance", "800.0", "Maximum teleport distance from enemies (at max level).", _, true, 200.0);
+        g_hCVChance = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_teleport_chance", "0.1", "Base teleport chance per level.", _, true, 0.0, true, 1.0);
+        g_hCVMinDistance = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_teleport_min_distance", "200.0", "Minimum teleport distance.", _, true, 50.0);
+        g_hCVMaxDistance = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_teleport_max_distance", "800.0", "Maximum teleport distance.", _, true, 200.0);
+        g_hCVZOffset = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_teleport_z_offset", "10.0", "Vertical offset when teleporting.", _, true, 0.0);
     }
 }
 
 public void OnClientPutInServer(int client)
 {
-    SDKHook(client, SDKHook_OnTakeDamagePost, Hook_OnTakeDamagePost);
+    SDKHook(client, SDKHook_OnTakeDamage, Hook_OnTakeDamage);
 }
 
-/**
- * SM:RPG Upgrade callbacks
- */
-
-// The core wants to display your upgrade somewhere. Translate it into the clients language!
 public void SMRPG_TranslateUpgrade(int client, const char[] shortname, TranslationType type, char[] translation, int maxlen)
 {
-    // Easy pattern is to use the shortname of your upgrade in the translation file
     if(type == TranslationType_Name)
         Format(translation, maxlen, "%T", UPGRADE_SHORTNAME, client);
-    // And "shortname description" as phrase in the translation file for the description.
     else if(type == TranslationType_Description)
     {
         char sDescriptionKey[MAX_UPGRADE_SHORTNAME_LENGTH+12] = UPGRADE_SHORTNAME;
@@ -86,96 +75,184 @@ public void SMRPG_TranslateUpgrade(int client, const char[] shortname, Translati
     }
 }
 
-void Hook_OnTakeDamagePost(int victim, int attacker, int inflictor, float damage, int damagetype, int weapon, const float damageForce[3], const float damagePosition[3], int damagecustom)
+Action Hook_OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3])
 {
-    // Validate attacker and victim
     if(attacker <= 0 || attacker > MaxClients || !IsClientInGame(attacker) || victim <= 0 || victim > MaxClients)
-        return;
+        return Plugin_Continue;
 
     if(!IsPlayerAlive(victim))
-        return;
+        return Plugin_Continue;
 
-    // SM:RPG is disabled?
     if(!SMRPG_IsEnabled())
-        return;
+        return Plugin_Continue;
     
-    // The upgrade is disabled completely?
     if(!SMRPG_IsUpgradeEnabled(UPGRADE_SHORTNAME))
-        return;
+        return Plugin_Continue;
     
-    // Are bots allowed to use this upgrade?
     if(IsFakeClient(victim) && SMRPG_IgnoreBots())
-        return;
+        return Plugin_Continue;
     
-    // Player didn't buy this upgrade yet.
     int iLevel = SMRPG_GetClientUpgradeLevel(victim, UPGRADE_SHORTNAME);
     if(iLevel <= 0)
-        return;
+        return Plugin_Continue;
 
-    // Check if this attack allows the victim to teleport
     float chance = g_hCVChance.FloatValue * iLevel;
     if(GetRandomFloat(0.0, 1.0) > chance)
-        return;
+        return Plugin_Continue;
     
     if(!SMRPG_RunUpgradeEffect(victim, UPGRADE_SHORTNAME, attacker))
-        return;
+        return Plugin_Continue;
 
-    // Calculate teleport distance based on level
+    DataPack pack = new DataPack();
+    pack.WriteCell(GetClientUserId(victim));
+    pack.WriteCell(GetClientUserId(attacker));
+    pack.WriteCell(iLevel);
+    
+    RequestFrame(DelayedTeleport, pack);
+    
+    return Plugin_Continue;
+}
+
+void DelayedTeleport(any data)
+{
+    DataPack pack = view_as<DataPack>(data);
+    pack.Reset();
+    
+    int victim = GetClientOfUserId(pack.ReadCell());
+    int attacker = GetClientOfUserId(pack.ReadCell());
+    int level = pack.ReadCell();
+    
+    delete pack;
+    
+    if(!victim || !IsPlayerAlive(victim) || !attacker)
+        return;
+    
     float minDistance = g_hCVMinDistance.FloatValue;
     float maxDistance = g_hCVMaxDistance.FloatValue;
-    float distance = minDistance + (maxDistance - minDistance) * (float(iLevel) / 20.0);
+    float distance = minDistance + (maxDistance - minDistance) * (float(level) / 20.0);
     
-    // Find a safe position away from the attacker
     float victimPos[3], attackerPos[3], teleportPos[3];
     GetClientAbsOrigin(victim, victimPos);
     GetClientAbsOrigin(attacker, attackerPos);
     
-    // Calculate direction away from attacker
-    MakeVectorFromPoints(attackerPos, victimPos, teleportPos);
-    NormalizeVector(teleportPos, teleportPos);
+    float awayDir[3];
+    MakeVectorFromPoints(attackerPos, victimPos, awayDir);
+    NormalizeVector(awayDir, awayDir);
     
-    // Scale by distance
-    ScaleVector(teleportPos, distance);
-    
-    // Add to victim position
-    AddVectors(victimPos, teleportPos, teleportPos);
-    
-    // Try to find a valid position on the ground
-    if(!FindValidPosition(teleportPos))
+    if(FindSafeTeleportPosition(victim, victimPos, awayDir, distance, teleportPos))
     {
-        // If we can't find a valid position, try a simpler approach
-        teleportPos[2] += 20.0; // Lift slightly off ground
+        TeleportEntity(victim, teleportPos, NULL_VECTOR, NULL_VECTOR);
     }
-    
-    // Teleport the player
-    TeleportEntity(victim, teleportPos, NULL_VECTOR, NULL_VECTOR);
 }
 
-bool FindValidPosition(float pos[3])
+bool FindSafeTeleportPosition(int client, float origin[3], float direction[3], float distance, float resultPos[3])
 {
-    float endPos[3];
-    endPos[0] = pos[0];
-    endPos[1] = pos[1];
-    endPos[2] = pos[2] - 100.0;
-    
-    Handle trace = TR_TraceRayFilterEx(pos, endPos, MASK_PLAYERSOLID_BRUSHONLY, RayType_EndPoint, TraceFilter);
-    if(TR_DidHit(trace))
+    for(int attempt = 0; attempt < 12; attempt++)
     {
-        TR_GetEndPosition(endPos, trace);
-        CloseHandle(trace);
+        float randomAngle = GetRandomFloat(0.0, 360.0);
+        float randomDistance = GetRandomFloat(distance * 0.7, distance * 1.3);
         
-        endPos[2] += 20.0;
-        pos[0] = endPos[0];
-        pos[1] = endPos[1];
-        pos[2] = endPos[2];
-        return true;
+        float testDir[3];
+        RotateYaw(direction, randomAngle, testDir);
+        
+        float testPos[3];
+        testPos[0] = origin[0] + testDir[0] * randomDistance;
+        testPos[1] = origin[1] + testDir[1] * randomDistance;
+        testPos[2] = origin[2] + g_hCVZOffset.FloatValue;
+        
+        if(IsSafePosition(client, testPos))
+        {
+            resultPos = testPos;
+            return true;
+        }
     }
     
-    CloseHandle(trace);
     return false;
 }
 
-public bool TraceFilter(int entity, int contentsMask)
+bool IsSafePosition(int client, float pos[3])
 {
+    float clientEyePos[3];
+    GetClientEyePosition(client, clientEyePos);
+    
+    float traceStart[3];
+    traceStart[0] = clientEyePos[0];
+    traceStart[1] = clientEyePos[1];
+    traceStart[2] = clientEyePos[2] - 36.0;
+    
+    float traceEnd[3];
+    traceEnd[0] = pos[0];
+    traceEnd[1] = pos[1];
+    traceEnd[2] = pos[2] + 72.0;
+    
+    TR_TraceRayFilter(traceStart, traceEnd, MASK_PLAYERSOLID, RayType_EndPoint, TraceFilter_NoPlayers, client);
+    
+    if(TR_DidHit())
+        return false;
+    
+    float groundPos[3];
+    if(!GetGroundPosition(pos, groundPos, 200.0))
+        return false;
+    
+    groundPos[2] += 5.0;
+    
+    float mins[3] = {-16.0, -16.0, 0.0};
+    float maxs[3] = {16.0, 16.0, 72.0};
+    
+    TR_TraceHullFilter(groundPos, groundPos, mins, maxs, MASK_PLAYERSOLID, TraceFilter_NoPlayers, client);
+    
+    if(TR_DidHit())
+        return false;
+    
+    float upPos[3];
+    upPos[0] = groundPos[0];
+    upPos[1] = groundPos[1];
+    upPos[2] = groundPos[2] + 72.0;
+    
+    TR_TraceHullFilter(groundPos, upPos, mins, maxs, MASK_PLAYERSOLID, TraceFilter_NoPlayers, client);
+    
+    return !TR_DidHit();
+}
+
+bool GetGroundPosition(float start[3], float result[3], float maxDistance)
+{
+    float end[3];
+    end[0] = start[0];
+    end[1] = start[1];
+    end[2] = start[2] - maxDistance;
+    
+    TR_TraceRayFilter(start, end, MASK_SOLID, RayType_EndPoint, TraceFilter_World);
+    
+    if(TR_DidHit())
+    {
+        TR_GetEndPosition(result);
+        return true;
+    }
+    
+    return false;
+}
+
+void RotateYaw(float vec[3], float angle, float out[3])
+{
+    float radian = angle * 0.01745329251994329576923690768489;
+    
+    float cos = Cosine(radian);
+    float sin = Sine(radian);
+    
+    out[0] = cos * vec[0] - sin * vec[1];
+    out[1] = sin * vec[0] + cos * vec[1];
+    out[2] = vec[2];
+}
+
+public bool TraceFilter_NoPlayers(int entity, int contentsMask, any data)
+{
+    if(entity == data)
+        return false;
+    
     return entity > MaxClients || entity == 0;
+}
+
+public bool TraceFilter_World(int entity, int contentsMask, any data)
+{
+    return entity == 0;
 }
