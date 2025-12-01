@@ -16,7 +16,7 @@ ConVar g_hCVZOffset;
 public Plugin myinfo = 
 {
     name = "SM:RPG Upgrade > Teleport",
-    author = "zombiesharp",
+    author = "+SyntX",
     description = "Teleports you away from enemies when taking damage.",
     version = SMRPG_VERSION,
     url = "https://www.wcfan.de/"
