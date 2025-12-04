@@ -128,4 +128,22 @@
 	{
 		"es"            "Te teletransporta lejos de los enemigos cuando recibes daño."
 	}
+	"chainlightning"
+	{
+		"es"            "Rayo en cadena"
+	}
+
+	"chainlightning description"
+	{
+		"es"            "Libera un rayo que salta entre enemigos y causa daño decreciente."
+	}
+	"bloodritual"
+	{
+		"es"            "Ritual de sangre"
+	}
+
+	"bloodritual description"
+	{
+		"es"            "Sacrifica salud para crear un charco de sangre que daña a los enemigos y te cura."
+	}
 }

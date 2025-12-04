@@ -348,4 +348,20 @@
 	{
 		"fr"            "Vous téléporte loin des ennemis lorsque vous subissez des dégâts."
 	}
+	"chainlightning"
+	{
+	    "fr"            "Éclair en chaîne"
+	}
+	"chainlightning description"
+	{
+		"fr"            "Déchaîne un éclair qui se propage entre les ennemis en infligeant des dégâts décroissants."
+	}
+	"bloodritual"
+	{
+		"fr"            "Rituel de sang"
+	}
+	"bloodritual description"
+	{
+		"fr"            "Sacrifiez de la vie pour créer une flaque de sang qui blesse les ennemis et vous soigne."
+	}
 }

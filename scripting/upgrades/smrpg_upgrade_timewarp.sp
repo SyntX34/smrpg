@@ -12,6 +12,7 @@
 ConVar g_hCVCooldown;
 ConVar g_hCVDuration;
 ConVar g_hCVRadius;
+ConVar g_hCVSlowAmount;
 
 Handle g_hTimeWarpTimer[MAXPLAYERS+1];
 bool g_bTimeWarped[MAXPLAYERS+1];
@@ -56,8 +57,9 @@ public void OnLibraryAdded(const char[] name)
         SMRPG_SetUpgradeBuySellCallback(UPGRADE_SHORTNAME, SMRPG_BuySell);
         
         g_hCVCooldown = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_timewarp_cooldown", "60.0", "Cooldown time in seconds", 0, true, 1.0);
-        g_hCVDuration = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_timewarp_duration", "5.0", "Duration of time warp effect in seconds", 0, true, 1.0);
+        g_hCVDuration = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_timewarp_duration", "3.0", "Duration of time warp effect in seconds", 0, true, 1.0);
         g_hCVRadius = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_timewarp_radius", "300.0", "Radius of time warp effect", 0, true, 100.0);
+        g_hCVSlowAmount = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_timewarp_slow", "0.70", "Movement speed multiplier (1.0 = normal, 0.5 = half speed)", 0, true, 0.1, true, 1.0);
     }
 }
 
@@ -113,7 +115,8 @@ public void OnPlayerPreThink(int client)
     if(g_bTimeWarped[client])
     {
         // Slow down player movement
-        SetEntPropFloat(client, Prop_Send, "m_flLaggedMovementValue", 0.5);
+        float slowAmount = g_hCVSlowAmount.FloatValue;
+        SetEntPropFloat(client, Prop_Send, "m_flLaggedMovementValue", slowAmount);
     }
 }
 

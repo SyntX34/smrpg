@@ -347,4 +347,21 @@
 	{
 		"hu"            "Sebzés elszenvedésekor elteleportál az ellenségektől."
 	}
+	"chainlightning"
+	{
+		"hu"            "Láncvillám"
+	}
+	"chainlightning description"
+	{
+		"hu"            "Villámot szabadít fel, amely ellenségek között ugrál, csökkenő sebzéssel."
+	}
+	"bloodritual"
+	{
+		"hu"            "Vérrituálé"
+	}
+
+	"bloodritual description"
+	{
+		"hu"            "Életerőt áldozol, hogy egy vérmedencét hozz létre, amely sebzi az ellenségeket és téged gyógyít."
+	}
 }

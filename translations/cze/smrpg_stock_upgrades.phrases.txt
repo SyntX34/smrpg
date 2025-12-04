@@ -127,4 +127,21 @@
 	{
 		"cze"            "Teleportuje vás pryč od nepřátel, když utržíte poškození."
 	}
+	"chainlightning"
+	{
+	    "cze"           "Řetězový blesk"
+	}
+	"chainlightning description"
+	{
+		"cze"           "Uvolní blesk, který se řetězí mezi nepřáteli a způsobuje klesající poškození."
+	}
+	"bloodritual"
+	{
+		"cze"           "Krvavý rituál"
+	}
+
+	"bloodritual description"
+	{
+		"cze"           "Obětuj zdraví, abys vytvořil krevní kaluž, která poškozuje nepřátele a léčí tebe."
+	}
 }

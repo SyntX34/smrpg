@@ -133,4 +133,21 @@
 	{
 		"fi"            "Teleporttaa sinut pois vihollisten luota, kun otat vahinkoa."
 	}
+	"chainlightning"
+	{
+		"fi"            "Ketjusalama"
+	}
+	"chainlightning description"
+	{
+		"fi"            "Vapauttaa salaman, joka ketjuuntuu vihollisten välillä ja tekee vähenevää vahinkoa."
+	}
+	"bloodritual"
+	{
+		"fi"            "Verirituaali"
+	}
+
+	"bloodritual description"
+	{
+		"fi"            "Uhraat omaa terveyttäsi luodaksesi verialtaan, joka vahingoittaa vihollisia ja parantaa sinua."
+	}
 }

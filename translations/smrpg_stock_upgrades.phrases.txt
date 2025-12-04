@@ -409,4 +409,22 @@
     {
         "en"			"Teleports you away from enemies when taking damage."
     }
+	"chainlightning"
+    {
+        "en"            "Chain Lightning"
+    }
+    
+    "chainlightning description"
+    {
+        "en"            "Unleash lightning that chains between enemies, dealing decreasing damage."
+    }
+	"bloodritual"
+    {
+        "en"            "Blood Ritual"
+    }
+    
+    "bloodritual description"
+    {
+        "en"            "Sacrifice health to create a blood pool that damages enemies and heals you."
+    }
 }

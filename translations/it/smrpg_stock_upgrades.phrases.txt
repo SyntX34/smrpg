@@ -128,4 +128,20 @@
 	{
 		"it"            "Seleziona un nemico vicino e teletrasportati lontano da essi."
 	}
+	"chainlightning"
+	{
+	    "it"            "Fulmine a catena"
+	}
+	"chainlightning description"
+	{
+	    "it"            "Scatena un fulmine che rimbalza tra i nemici, infliggendo danni decrescenti."
+	}
+	"bloodritual"
+	{
+	    "it"            "Rituale di sangue"
+	}
+	"bloodritual description"
+	{
+		"it"            "Sacrifica salute per creare una pozza di sangue che danneggia i nemici e ti cura."
+	}
 }

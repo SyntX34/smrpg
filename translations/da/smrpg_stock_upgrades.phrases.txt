@@ -407,4 +407,21 @@
 	{
 		"da"            "Teleporterer dig væk fra fjender, når du tager skade."
 	}
+	"chainlightning"
+	{
+	    "da"            "Kædelyn"
+	}
+	"chainlightning description"
+	{
+		"da"            "Udløser lyn, der kæder mellem fjender og gør gradvist mindre skade."
+	}
+	"bloodritual"
+	{
+		"da"            "Blodritual"
+	}
+
+	"bloodritual description"
+	{
+		"da"            "Ofre liv for at skabe en blodpøl, der skader fjender og heler dig."
+	}
 }

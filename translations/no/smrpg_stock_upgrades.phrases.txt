@@ -128,4 +128,20 @@
 	{
 		"no"            "Teleporterer deg bort fra fiender når du tar skade."
 	}
+	"chainlightning"
+	{
+	    "no"            "Kjedelyn"
+	}
+	"chainlightning description"
+	{
+	    "no"            "Utløser lyn som hopper mellom fiender og gjør gradvis mindre skade."
+	}
+	"bloodritual"
+	{
+	    "no"            "Blodritual"
+	}
+	"bloodritual description"
+	{
+		"no"            "Ofre helse for å skape en blodpøl som skader fiender og helbreder deg."
+	}
 }

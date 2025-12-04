@@ -70,12 +70,12 @@ public void OnClientDisconnect_Post(int client)
  */
 public void Event_OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
 {
-	int client = GetClientOfUserId(event.GetInt("userid"));
-	if(!client)
-		return;
-	
-	// Forget every previous damage
-	g_hHitInfo[client].Clear();
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if(!client)
+        return;
+    
+    if(g_hHitInfo[client] != null)
+        g_hHitInfo[client].Clear();
 }
 
 

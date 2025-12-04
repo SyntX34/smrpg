@@ -408,4 +408,20 @@
 	{
 		"de"            "Teleportiert dich von Gegnern weg, wenn du Schaden erleidest."
 	}
+	"chainlightning"
+	{
+		"de"            "Kettenblitz"
+	}
+	"chainlightning description"
+	{
+		"de"            "Entfesselt einen Blitz, der zwischen Feinden überspringt und abnehmenden Schaden verursacht."
+	}
+	"bloodritual"
+	{
+		"de"            "Blutritual"
+	}
+	"bloodritual description"
+	{
+		"de"            "Opfere Gesundheit, um eine Blutlache zu erschaffen, die Feinde verletzt und dich heilt."
+	}
 }
