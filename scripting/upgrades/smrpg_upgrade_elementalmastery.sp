@@ -23,7 +23,9 @@ ConVar g_hCVDamageMultiplier;
 ConVar g_hCVElementSwitchTime;
 
 Handle g_hElementTimer[MAXPLAYERS+1];
+Handle g_hAutoSwitchTimer[MAXPLAYERS+1];
 bool g_bElementActive[MAXPLAYERS+1];
+bool g_bUpgradeLoaded = false;
 
 public Plugin myinfo = 
 {
@@ -38,10 +40,12 @@ public void OnPluginStart()
 {
     LoadTranslations("smrpg_stock_upgrades.phrases");
     
-    for(int i=1;i<=MaxClients;i++)
+    for(int i = 1; i <= MaxClients; i++)
     {
         if(IsClientInGame(i))
+        {
             OnClientPutInServer(i);
+        }
     }
 }
 
@@ -67,6 +71,26 @@ public void OnLibraryAdded(const char[] name)
         g_hCVCooldown = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_elementalmastery_cooldown", "30.0", "Cooldown time in seconds between element switches", 0, true, 1.0);
         g_hCVDamageMultiplier = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_elementalmastery_damage", "1.5", "Damage multiplier for elemental attacks", 0, true, 1.0);
         g_hCVElementSwitchTime = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_elementalmastery_switchtime", "5.0", "Time between automatic element switches", 0, true, 1.0);
+        
+        g_bUpgradeLoaded = true;
+        
+        // Initialize auto-switch for any clients that already have the upgrade
+        for(int i = 1; i <= MaxClients; i++)
+        {
+            if(IsClientInGame(i) && SMRPG_GetClientUpgradeLevel(i, UPGRADE_SHORTNAME) > 0)
+            {
+                StartAutoElementSwitch(i);
+                g_bElementActive[i] = true;
+            }
+        }
+    }
+}
+
+public void OnLibraryRemoved(const char[] name)
+{
+    if(StrEqual(name, "smrpg"))
+    {
+        g_bUpgradeLoaded = false;
     }
 }
 
@@ -74,10 +98,8 @@ public void OnClientPutInServer(int client)
 {
     g_iCurrentElement[client] = ELEMENT_FIRE;
     g_hElementTimer[client] = null;
+    g_hAutoSwitchTimer[client] = null;
     g_bElementActive[client] = false;
-    
-    // Start automatic element switching
-    CreateTimer(g_hCVElementSwitchTime.FloatValue, SwitchElement_Timer, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
     
     // Hook for damage dealt
     SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
@@ -85,12 +107,23 @@ public void OnClientPutInServer(int client)
 
 public void OnClientDisconnect(int client)
 {
+    ClearClientTimers(client);
+    g_bElementActive[client] = false;
+}
+
+void ClearClientTimers(int client)
+{
     if(g_hElementTimer[client] != null)
     {
         KillTimer(g_hElementTimer[client]);
         g_hElementTimer[client] = null;
     }
-    g_bElementActive[client] = false;
+    
+    if(g_hAutoSwitchTimer[client] != null)
+    {
+        KillTimer(g_hAutoSwitchTimer[client]);
+        g_hAutoSwitchTimer[client] = null;
+    }
 }
 
 /**
@@ -110,13 +143,20 @@ public void SMRPG_TranslateUpgrade(int client, const char[] shortname, Translati
 
 public void SMRPG_BuySell(int client, UpgradeQueryType type)
 {
-    // Reset any active effects when upgrade is sold
-    if(type == UpgradeQueryType_Sell)
+    if(type == UpgradeQueryType_Buy)
     {
-        if(g_bElementActive[client])
+        // Player bought the upgrade, start auto-switching
+        if(!g_bElementActive[client])
         {
-            g_bElementActive[client] = false;
+            StartAutoElementSwitch(client);
+            g_bElementActive[client] = true;
         }
+    }
+    else if(type == UpgradeQueryType_Sell)
+    {
+        // Player sold the upgrade, stop all effects
+        ClearClientTimers(client);
+        g_bElementActive[client] = false;
     }
 }
 
@@ -133,7 +173,14 @@ public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &dam
             if(SMRPG_IsUpgradeEnabled(UPGRADE_SHORTNAME) && SMRPG_RunUpgradeEffect(victim, UPGRADE_SHORTNAME, attacker))
             {
                 // Apply elemental damage multiplier
-                damage *= g_hCVDamageMultiplier.FloatValue;
+                if(g_hCVDamageMultiplier != null)
+                {
+                    damage *= g_hCVDamageMultiplier.FloatValue;
+                }
+                else
+                {
+                    damage *= 1.5; // Default multiplier
+                }
                 
                 // Apply elemental effect based on current element
                 ApplyElementalEffect(victim, attacker, g_iCurrentElement[attacker]);
@@ -156,29 +203,38 @@ void ApplyElementalEffect(int victim, int attacker, ElementType element)
         case ELEMENT_FIRE:
         {
             // Burn effect - DoT over time
-            CreateTimer(1.0, FireDamage_Timer, victim, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+            CreateTimer(1.0, FireDamage_Timer, GetClientUserId(victim), TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
             // PrintToChat(attacker, "Fire damage applied to %N!", victim);
         }
         case ELEMENT_ICE:
         {
             // Slow effect
-            SetEntPropFloat(victim, Prop_Send, "m_flLaggedMovementValue", 0.5);
-            CreateTimer(3.0, ResetMovement_Timer, victim);
-            // PrintToChat(attacker, "Ice slow applied to %N!", victim);
+            if(IsPlayerAlive(victim))
+            {
+                SetEntPropFloat(victim, Prop_Send, "m_flLaggedMovementValue", 0.5);
+                CreateTimer(3.0, ResetMovement_Timer, GetClientUserId(victim));
+                // PrintToChat(attacker, "Ice slow applied to %N!", victim);
+            }
         }
         case ELEMENT_LIGHTNING:
         {
             // Shock effect - extra damage
             float extraDamage = 10.0;
-            SDKHooks_TakeDamage(victim, attacker, attacker, extraDamage, DMG_SHOCK);
-            // PrintToChat(attacker, "Lightning shock applied to %N!", victim);
+            if(IsPlayerAlive(victim))
+            {
+                SDKHooks_TakeDamage(victim, attacker, attacker, extraDamage, DMG_SHOCK);
+                // PrintToChat(attacker, "Lightning shock applied to %N!", victim);
+            }
         }
         case ELEMENT_EARTH:
         {
             // Stun effect - stop movement briefly
-            SetEntityMoveType(victim, MOVETYPE_NONE);
-            CreateTimer(1.5, ResetMovementType_Timer, victim);
-            //PrintToChat(attacker, "Earth stun applied to %N!", victim);
+            if(IsPlayerAlive(victim) && GetEntityMoveType(victim) != MOVETYPE_NONE)
+            {
+                SetEntityMoveType(victim, MOVETYPE_NONE);
+                CreateTimer(1.5, ResetMovementType_Timer, GetClientUserId(victim));
+                //PrintToChat(attacker, "Earth stun applied to %N!", victim);
+            }
         }
     }
 }
@@ -203,94 +259,131 @@ void SwitchToNextElement(int client)
 }
 
 /**
- * Activate specific element
+ * Manual element switching function
  */
-public void SMRPG_UpgradeActivated(int client, const char[] shortname)
+public Action Command_SwitchElement(int client, int args)
 {
-    if(!StrEqual(shortname, UPGRADE_SHORTNAME))
-        return;
-    
+    if(!g_bUpgradeLoaded)
+        return Plugin_Handled;
+        
     if(g_hElementTimer[client] != null)
     {
         //PrintToChat(client, "Element switch is on cooldown!");
-        return;
+        return Plugin_Handled;
     }
     
     if(!IsPlayerAlive(client))
     {
         //PrintToChat(client, "You must be alive to switch elements!");
-        return;
+        return Plugin_Handled;
+    }
+    
+    if(SMRPG_GetClientUpgradeLevel(client, UPGRADE_SHORTNAME) == 0)
+    {
+        //PrintToChat(client, "You don't have the Elemental Mastery upgrade!");
+        return Plugin_Handled;
     }
     
     if(!SMRPG_RunUpgradeEffect(client, UPGRADE_SHORTNAME))
-        return;
+        return Plugin_Handled;
+    
+    // Start auto element switching if not already active
+    if(!g_bElementActive[client])
+    {
+        StartAutoElementSwitch(client);
+        g_bElementActive[client] = true;
+    }
     
     // Switch to next element
     SwitchToNextElement(client);
     
-    // Set cooldown
-    float cooldown = g_hCVCooldown.FloatValue;
-    g_hElementTimer[client] = CreateTimer(cooldown, ElementCooldown_Timer, client);
+    // Set cooldown for manual switch
+    float cooldown = g_hCVCooldown != null ? g_hCVCooldown.FloatValue : 30.0;
+    DataPack pack = new DataPack();
+    pack.WriteCell(GetClientUserId(client));
+    g_hElementTimer[client] = CreateTimer(cooldown, ElementCooldown_Timer, pack);
+    
+    return Plugin_Handled;
+}
+
+void StartAutoElementSwitch(int client)
+{
+    // Clear any existing auto switch timer
+    if(g_hAutoSwitchTimer[client] != null)
+    {
+        KillTimer(g_hAutoSwitchTimer[client]);
+        g_hAutoSwitchTimer[client] = null;
+    }
+    
+    // Start new auto switch timer
+    float switchTime = g_hCVElementSwitchTime != null ? g_hCVElementSwitchTime.FloatValue : 5.0;
+    DataPack pack = new DataPack();
+    pack.WriteCell(GetClientUserId(client));
+    g_hAutoSwitchTimer[client] = CreateTimer(switchTime, AutoSwitchElement_Timer, pack, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
 }
 
 /**
  * Timer callbacks
  */
-public Action SwitchElement_Timer(Handle timer, any client)
+public Action AutoSwitchElement_Timer(Handle timer, DataPack pack)
 {
-    if(IsClientInGame(client) && IsPlayerAlive(client))
+    pack.Reset();
+    int client = GetClientOfUserId(pack.ReadCell());
+    
+    if(client > 0 && IsClientInGame(client) && IsPlayerAlive(client) && SMRPG_GetClientUpgradeLevel(client, UPGRADE_SHORTNAME) > 0)
     {
         // Automatically switch elements
         SwitchToNextElement(client);
+        return Plugin_Continue;
     }
-    return Plugin_Continue;
+    
+    // Client disconnected or no longer has upgrade
+    delete pack;
+    g_hAutoSwitchTimer[client] = null;
+    return Plugin_Stop;
 }
 
-public Action FireDamage_Timer(Handle timer, any victim)
+public Action FireDamage_Timer(Handle timer, any userid)
 {
-    static int fireTicks[MAXPLAYERS+1] = {0};
+    int victim = GetClientOfUserId(userid);
     
-    if(!IsClientInGame(victim) || !IsPlayerAlive(victim))
+    if(victim > 0 && IsClientInGame(victim) && IsPlayerAlive(victim))
     {
-        fireTicks[victim] = 0;
-        return Plugin_Stop;
+        // Deal damage over time
+        SDKHooks_TakeDamage(victim, 0, 0, 5.0, DMG_BURN);
+        return Plugin_Continue;
     }
     
-    // Deal damage over time
-    SDKHooks_TakeDamage(victim, 0, 0, 5.0, DMG_BURN);
-    fireTicks[victim]++;
-    
-    // Stop after 5 ticks (5 seconds)
-    if(fireTicks[victim] >= 5)
-    {
-        fireTicks[victim] = 0;
-        return Plugin_Stop;
-    }
-    
-    return Plugin_Continue;
+    return Plugin_Stop;
 }
 
-public Action ResetMovement_Timer(Handle timer, any client)
+public Action ResetMovement_Timer(Handle timer, any userid)
 {
-    if(IsClientInGame(client) && IsPlayerAlive(client))
+    int client = GetClientOfUserId(userid);
+    if(client > 0 && IsClientInGame(client) && IsPlayerAlive(client))
     {
         SetEntPropFloat(client, Prop_Send, "m_flLaggedMovementValue", 1.0);
     }
     return Plugin_Stop;
 }
 
-public Action ResetMovementType_Timer(Handle timer, any client)
+public Action ResetMovementType_Timer(Handle timer, any userid)
 {
-    if(IsClientInGame(client) && IsPlayerAlive(client))
+    int client = GetClientOfUserId(userid);
+    if(client > 0 && IsClientInGame(client) && IsPlayerAlive(client))
     {
         SetEntityMoveType(client, MOVETYPE_WALK);
     }
     return Plugin_Stop;
 }
 
-public Action ElementCooldown_Timer(Handle timer, any client)
+public Action ElementCooldown_Timer(Handle timer, DataPack pack)
 {
-    if(IsClientInGame(client))
+    pack.Reset();
+    int client = GetClientOfUserId(pack.ReadCell());
+    delete pack;
+    
+    if(client > 0 && IsClientInGame(client))
     {
         g_hElementTimer[client] = null;
         //PrintToChat(client, "Element switch is ready!");
