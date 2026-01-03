@@ -160,7 +160,6 @@ public void OnPluginStart()
 	RegConsoleCmd("rpgsession", Cmd_RPGSession, "Show your session stats");
 	RegConsoleCmd("rpghelp", Cmd_RPGHelp, "Show the SM:RPG help menu");
 	RegConsoleCmd("rpgexp", Cmd_RPGLatestExperience, "Show the latest experience you earned");
-	RegAdminCmd("sm_rpg_debug_prestige", Cmd_DebugPrestige, ADMFLAG_ROOT, "Debug prestige upgrade availability");
 	
 	RegisterAdminCommands();
 	RegisterPlayerForwards();
