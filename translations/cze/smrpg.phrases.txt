@@ -177,4 +177,43 @@
 	{
 		"cze"			"VAROVÁNÍ: Ztratíš všechny levely, kredity a zkušenosti.\nOpravdu chceš vše vymazat?"
 	}
+	"Confirm reset prestige"
+	{
+		"cze"	"Opravdu chcete resetovat prestiž hráče %N?"
+	}
+
+	"Confirm set prestige"
+	{
+		"cze"	"Opravdu chcete nastavit prestiž hráče %N na %d?"
+	}
+
+	"Manage Prestige"
+	{
+		"cze"	"Správa prestiže"
+	}
+
+	"Reset Prestige to 0"
+	{
+		"cze"	"Resetovat prestiž na 0"
+	}
+
+	"Current Prestige"
+	{
+		"cze"	"Aktuální prestiž"
+	}
+
+	"Prestige"
+	{
+		"cze"	"Prestiž"
+	}
+
+	"Inform player prestige reset"
+	{
+		"cze"	"Resetovali jste prestiž hráče %N"
+	}
+
+	"Inform player prestige set"
+	{
+		"cze"	"Nastavili jste prestiž hráče %N na %d"
+	}
 }

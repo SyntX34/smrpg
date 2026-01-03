@@ -333,4 +333,43 @@
 		// 1: Value of smrpg_lastexperience_count. The amount of experience saved in the array.
 		"hu"			"Írd be: {N}rpgexp{G} hogy lásd a legutolsó {1} indokokat és mennyiséget amit szereztél szintlépéskor."
 	}
+	"Confirm reset prestige"
+	{
+		"hu"	"Biztosan vissza akarod állítani %N presztízsét?"
+	}
+
+	"Confirm set prestige"
+	{
+		"hu"	"Biztosan be akarod állítani %N presztízsét erre: %d?"
+	}
+
+	"Manage Prestige"
+	{
+		"hu"	"Presztízs kezelése"
+	}
+
+	"Reset Prestige to 0"
+	{
+		"hu"	"Presztízs visszaállítása 0-ra"
+	}
+
+	"Current Prestige"
+	{
+		"hu"	"Jelenlegi presztízs"
+	}
+
+	"Prestige"
+	{
+		"hu"	"Presztízs"
+	}
+
+	"Inform player prestige reset"
+	{
+		"hu"	"Visszaállítottad %N presztízsét"
+	}
+
+	"Inform player prestige set"
+	{
+		"hu"	"Beállítottad %N presztízsét erre: %d"
+	}
 }

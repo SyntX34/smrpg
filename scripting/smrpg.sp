@@ -128,6 +128,9 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 public void OnPluginStart()
 {
+	// Create ConVars FIRST, before setting up AutoExecConfig
+	CreateConVars();
+	
 	ConVar hVersion = CreateConVar("smrpg_version", SMRPG_VERSION, "SM:RPG version", FCVAR_NOTIFY|FCVAR_DONTRECORD);
 	if(hVersion != null)
 	{
@@ -139,80 +142,14 @@ public void OnPluginStart()
 	
 	AutoExecConfig_SetFile("plugin.smrpg");
 	AutoExecConfig_SetCreateFile(true);
-	AutoExecConfig_SetPlugin(null);
 	
-	g_hCVEnable = AutoExecConfig_CreateConVar("smrpg_enable", "1", "If set to 1, SM:RPG is enabled, if 0, SM:RPG is disabled", 0, true, 0.0, true, 1.0);
-	g_hCVFFA = AutoExecConfig_CreateConVar("smrpg_ffa", "0", "Free-For-All mode to ignore teams and handle teammates as if they're enemies?", 0, true, 0.0, true, 1.0);
-	g_hCVBotEnable = AutoExecConfig_CreateConVar("smrpg_bot_enable", "1", "If set to 1, bots will be able to use the SM:RPG plugin", 0, true, 0.0, true, 1.0);
-	g_hCVBotSaveStats = AutoExecConfig_CreateConVar("smrpg_bot_save_stats", "0", "If set to 1, the stats of bots are saved per bot name and are restored when the bot is added later again.", 0, true, 0.0, true, 1.0);
-	g_hCVBotNeedHuman = AutoExecConfig_CreateConVar("smrpg_bot_need_human", "1", "Don't allow bots to gain experience while no human player is on the server?", 0, true, 0.0, true, 1.0);
-	g_hCVNeedEnemies = AutoExecConfig_CreateConVar("smrpg_need_enemies", "1", "Don't give any experience if there is no enemy in the opposite team?", 0, true, 0.0, true, 1.0);
-	g_hCVEnemiesNotAFK = AutoExecConfig_CreateConVar("smrpg_enemies_not_afk", "1", "Don't give any experience if all enemies are currently AFK?", 0, true, 0.0, true, 1.0);
-	g_hCVDebug = AutoExecConfig_CreateConVar("smrpg_debug", "0", "Turns on debug mode for this plugin", 0, true, 0.0, true, 1.0);
-	g_hCVSaveData = AutoExecConfig_CreateConVar("smrpg_save_data", "1", "If disabled, the database won't be updated (this means player data won't be saved!)", 0, true, 0.0, true, 1.0);
-	g_hCVSaveInterval = AutoExecConfig_CreateConVar("smrpg_save_interval", "150", "Interval (in seconds) that player data is auto saved (0 = off)", 0, true, 0.0);
-	g_hCVPlayerExpire = AutoExecConfig_CreateConVar("smrpg_player_expire", "30", "Sets how many days until an unused player account is deleted (0 = never)", 0, true, 0.0);
-	g_hCVAllowSelfReset = AutoExecConfig_CreateConVar("smrpg_allow_selfreset", "1", "Are players allowed to reset their own rpg stats in the settings menu?", 0, true, 0.0, true, 1.0);
-	
-	g_hCVBotMaxlevel = AutoExecConfig_CreateConVar("smrpg_bot_maxlevel", "250", "The maximum level a bot can reach until its stats are reset (0 = infinite)", 0, true, 0.0);
-	g_hCVBotMaxlevelReset = AutoExecConfig_CreateConVar("smrpg_bot_maxlevel_reset", "1", "Reset the bot to level 1, if the bot reaches the maxlevel for bots?", 0, true, 0.0, true, 1.0);
-	g_hCVPlayerMaxlevel = AutoExecConfig_CreateConVar("smrpg_player_maxlevel", "0", "The maximum level a player can reach until he stops getting more experience. (0 = infinite)", 0, true, 0.0);
-	g_hCVPlayerMaxlevelReset = AutoExecConfig_CreateConVar("smrpg_player_maxlevel_reset", "0", "Reset the player to level 1, if the player reaches the player maxlevel?", 0, true, 0.0, true, 1.0);
-	
-	g_hCVBotKillPlayer = AutoExecConfig_CreateConVar("smrpg_bot_kill_player", "1", "Bots earn experience for interacting with real players?", 0, true, 0.0, true, 1.0);
-	g_hCVPlayerKillBot = AutoExecConfig_CreateConVar("smrpg_player_kill_bot", "1", "Real players earn experience for interacting with bots?", 0, true, 0.0, true, 1.0);
-	g_hCVBotKillBot = AutoExecConfig_CreateConVar("smrpg_bot_kill_bot", "1", "Bots earn experience for interacting with bots?", 0, true, 0.0, true, 1.0);
-	
-	g_hCVAnnounceNewLvl = AutoExecConfig_CreateConVar("smrpg_announce_newlvl", "1", "Global announcement when a player reaches a new level (1 = enable, 0 = disable)", 0, true, 0.0, true, 1.0);
-	g_hCVAFKTime = AutoExecConfig_CreateConVar("smrpg_afk_time", "30", "After how many seconds of idleing is the player flagged as AFK? (0 = off)", 0, true, 0.0);
-	g_hCVSpawnProtect = AutoExecConfig_CreateConVar("smrpg_spawn_protect_noxp", "1", "Don't give any experience for actions against players who just spawned and haven't pressed any buttons yet?", 0, true, 0.0, true, 1.0);
-	
-	g_hCVExpNotice = AutoExecConfig_CreateConVar("smrpg_exp_notice", "1", "Sends notifications to players when they gain Experience", 0, true, 0.0, true, 1.0);
-	g_hCVExpMax = AutoExecConfig_CreateConVar("smrpg_exp_max", "50000", "Maximum experience that will ever be required", 0, true, 0.0);
-	g_hCVExpStart = AutoExecConfig_CreateConVar("smrpg_exp_start", "250", "Experience required for Level 1", 0, true, 0.0);
-	g_hCVExpInc = AutoExecConfig_CreateConVar("smrpg_exp_inc", "50", "Increment experience required for each level (until smrpg_exp_max)", 0, true, 0.0);
-	
-	g_hCVExpDamage = AutoExecConfig_CreateConVar("smrpg_exp_damage", "1.0", "Experience for hurting an enemy multiplied by the damage done", 0, true, 0.0);
-	g_hCVExpKill = AutoExecConfig_CreateConVar("smrpg_exp_kill", "15.0", "Experience for a kill multiplied by the victim's level", 0, true, 0.0);
-	g_hCVExpKillBonus = AutoExecConfig_CreateConVar("smrpg_exp_kill_bonus", "0.0", "Extra constant experience to give on top of the regular experience on a kill.", 0, true, 0.0);
-	g_hCVExpKillMax = AutoExecConfig_CreateConVar("smrpg_exp_kill_max", "0.0", "Maximum experience a player can ever earn for killing someone. (0 = unlimited)", 0, true, 0.0);
-	
-	g_hCVExpTeamwin = AutoExecConfig_CreateConVar("smrpg_exp_teamwin", "0.15", "Experience multipled by the experience required and the team ratio given to a team for completing the objective", 0, true, 0.0);
-	AutoExecConfig_CreateConVar("smrpg_exp_use_teamratio", "1", "Scale the experience for team events by the team ratio? This is e.g. used to lower the amount of experience earned, when a winning team has more players than the other.", 0, true, 0.0, true, 1.0);
-	
-	g_hCVLastExperienceCount = AutoExecConfig_CreateConVar("smrpg_lastexperience_count", "50", "How many times should we remember why each player got some experience in the recent past?", 0, true, 1.0);
-	
-	g_hCVLevelStart = AutoExecConfig_CreateConVar("smrpg_level_start", "1", "Starting level for new players.", 0, true, 1.0);
-	g_hCVLevelStartGiveCredits = AutoExecConfig_CreateConVar("smrpg_level_start_give_credits", "1", "Give the players the credits for all additional start levels as if they'd leveled up themselves?", 0, true, 0.0, true, 1.0);
-	g_hCVUpgradeStartLevelsFree = AutoExecConfig_CreateConVar("smrpg_upgrade_start_levels_free", "1", "Don't charge the players for the initial upgrade levels (smrpg_<upgr>_startlevel)?", 0, true, 0.0, true, 1.0);
-	g_hCVCreditsInc = AutoExecConfig_CreateConVar("smrpg_credits_inc", "5", "Credits given to each new level", 0, true, 0.0);
-	g_hCVCreditsStart = AutoExecConfig_CreateConVar("smrpg_credits_start", "0", "Starting credits for Level 1", 0, true, 0.0);
-	g_hCVSalePercent = AutoExecConfig_CreateConVar("smrpg_sale_percent", "0.75", "Percentage of credits a player gets for selling an upgrade", 0, true, 0.0);
-	g_hCVAllowSellDisabled = AutoExecConfig_CreateConVar("smrpg_allow_sell_disabled_upgrade", "0", "Allow players to sell a level of an upgrade they already purchased even if the upgrade is disabled?", 0, true, 0.0, true, 1.0);
-	g_hCVIgnoreLevelBarrier = AutoExecConfig_CreateConVar("smrpg_ignore_level_barrier", "0", "Ignore the hardcoded maxlevels for the upgrades and allow to set the maxlevel as high as you want. THIS MIGHT BE BAD!", 0, true, 0.0, true, 1.0);
-	g_hCVAllowPresentUpgradeUsage = AutoExecConfig_CreateConVar("smrpg_allow_present_upgrade_usage", "0", "Allow players to use the upgrades they already have levels for, if they normally wouldn't have access to the upgrade due to the adminflags.\nThis allows admins to give upgrades to players they aren't able to buy themselves.", 0, true, 0.0, true, 1.0);
-	g_hCVDisableLevelSelection = AutoExecConfig_CreateConVar("smrpg_disable_level_selection", "0", "Don't allow players to change the selected levels of their upgrades to a lower level than they already purchased?", 0, true, 0.0, true, 1.0);
-	g_hCVShowMaxLevelInMenu = AutoExecConfig_CreateConVar("smrpg_show_maxlevel_in_menu", "0", "Show the maxlevel of an upgrade in the upgrade buy, sell and info menus?", 0, true, 0.0, true, 1.0);
-	g_hCVShowUpgradesOfOtherTeam = AutoExecConfig_CreateConVar("smrpg_show_upgrades_teamlock", "1", "Show the upgrades if they are locked to the other team?\n\t0: Don't show teamlocked upgrades at all.\n\t1: Show upgrades if the player already bought a level while being in the other team.\n\t2: Always show all upgrades.", 0, true, 0.0, true, 2.0);
-	g_hCVBuyUpgradesOfOtherTeam = AutoExecConfig_CreateConVar("smrpg_buy_upgrades_teamlock", "0", "Allow players to buy upgrades of the other team, even if they can't use them in the current team?", 0, true, 0.0, true, 1.0);
-	g_hCVShowTeamlockNoticeOwnTeam = AutoExecConfig_CreateConVar("smrpg_show_teamlock_notice_own_team", "0", "Always show the team restriction of the upgrade in the menu, even if the player is in the correct team?", 0, true, 0.0, true, 1.0);
-	
-	g_hCVShowUpgradePurchase = AutoExecConfig_CreateConVar("smrpg_show_upgrade_purchase_in_chat", "0", "Show a message to all in chat when a player buys an upgrade.", 0, true, 0.0, true, 1.0);
-	g_hCVShowMenuOnLevelDefault = AutoExecConfig_CreateConVar("smrpg_show_menu_on_levelup", "0", "Show the rpg menu when a player levels up by default? Players can change it in their settings individually afterwards.", 0, true, 0.0, true, 1.0);
-	g_hCVFadeOnLevelDefault = AutoExecConfig_CreateConVar("smrpg_fade_screen_on_levelup", "1", "Fade the screen golden when a player levels up by default? Players can change it in their settings individually afterwards.", 0, true, 0.0, true, 1.0);
-	
-	g_hCVFadeOnLevelColor = AutoExecConfig_CreateConVar("smrpg_fade_screen_on_levelup_color", "255 215 0 40", "RGBA color to fade the screen in for a short time after levelup. Default is a golden shine.", 0);
+	// Setup hooks and other initialization AFTER ConVars are created
+	SetupConVarHooks();
 	
 	AutoExecConfig_ExecuteFile();
-	//AutoExecConfig_CleanFile();
 	
 	// forward void SMRPG_OnEnableStatusChanged(bool bEnabled);
 	g_hfwdOnEnableStatusChanged = CreateGlobalForward("SMRPG_OnEnableStatusChanged", ET_Ignore, Param_Cell);
-	
-	
-	g_hCVEnable.AddChangeHook(ConVar_EnableChanged);
-	g_hCVSaveInterval.AddChangeHook(ConVar_SaveIntervalChanged);
-	g_hCVLastExperienceCount.AddChangeHook(ConVar_LastExperienceCountChanged);
 	
 	RegConsoleCmd("rpgmenu", Cmd_RPGMenu, "Opens the rpg main menu");
 	RegConsoleCmd("rpg", Cmd_RPGMenu, "Opens the rpg main menu");
@@ -223,6 +160,7 @@ public void OnPluginStart()
 	RegConsoleCmd("rpgsession", Cmd_RPGSession, "Show your session stats");
 	RegConsoleCmd("rpghelp", Cmd_RPGHelp, "Show the SM:RPG help menu");
 	RegConsoleCmd("rpgexp", Cmd_RPGLatestExperience, "Show the latest experience you earned");
+	RegAdminCmd("sm_rpg_debug_prestige", Cmd_DebugPrestige, ADMFLAG_ROOT, "Debug prestige upgrade availability");
 	
 	RegisterAdminCommands();
 	RegisterPlayerForwards();
@@ -278,6 +216,80 @@ public void OnPluginStart()
 		// If so, manually fire the callback
 		OnAdminMenuReady(topmenu);
 	}
+}
+
+void CreateConVars()
+{
+	// Create ConVars directly first
+	g_hCVEnable = CreateConVar("smrpg_enable", "1", "If set to 1, SM:RPG is enabled, if 0, SM:RPG is disabled", 0, true, 0.0, true, 1.0);
+	g_hCVFFA = CreateConVar("smrpg_ffa", "0", "Free-For-All mode to ignore teams and handle teammates as if they're enemies?", 0, true, 0.0, true, 1.0);
+	g_hCVBotEnable = CreateConVar("smrpg_bot_enable", "1", "If set to 1, bots will be able to use the SM:RPG plugin", 0, true, 0.0, true, 1.0);
+	g_hCVBotSaveStats = CreateConVar("smrpg_bot_save_stats", "0", "If set to 1, the stats of bots are saved per bot name and are restored when the bot is added later again.", 0, true, 0.0, true, 1.0);
+	g_hCVBotNeedHuman = CreateConVar("smrpg_bot_need_human", "1", "Don't allow bots to gain experience while no human player is on the server?", 0, true, 0.0, true, 1.0);
+	g_hCVNeedEnemies = CreateConVar("smrpg_need_enemies", "1", "Don't give any experience if there is no enemy in the opposite team?", 0, true, 0.0, true, 1.0);
+	g_hCVEnemiesNotAFK = CreateConVar("smrpg_enemies_not_afk", "1", "Don't give any experience if all enemies are currently AFK?", 0, true, 0.0, true, 1.0);
+	g_hCVDebug = CreateConVar("smrpg_debug", "0", "Turns on debug mode for this plugin", 0, true, 0.0, true, 1.0);
+	g_hCVSaveData = CreateConVar("smrpg_save_data", "1", "If disabled, the database won't be updated (this means player data won't be saved!)", 0, true, 0.0, true, 1.0);
+	g_hCVSaveInterval = CreateConVar("smrpg_save_interval", "150", "Interval (in seconds) that player data is auto saved (0 = off)", 0, true, 0.0);
+	g_hCVPlayerExpire = CreateConVar("smrpg_player_expire", "30", "Sets how many days until an unused player account is deleted (0 = never)", 0, true, 0.0);
+	g_hCVAllowSelfReset = CreateConVar("smrpg_allow_selfreset", "1", "Are players allowed to reset their own rpg stats in the settings menu?", 0, true, 0.0, true, 1.0);
+	
+	g_hCVBotMaxlevel = CreateConVar("smrpg_bot_maxlevel", "250", "The maximum level a bot can reach until its stats are reset (0 = infinite)", 0, true, 0.0);
+	g_hCVBotMaxlevelReset = CreateConVar("smrpg_bot_maxlevel_reset", "1", "Reset the bot to level 1, if the bot reaches the maxlevel for bots?", 0, true, 0.0, true, 1.0);
+	g_hCVPlayerMaxlevel = CreateConVar("smrpg_player_maxlevel", "0", "The maximum level a player can reach until he stops getting more experience. (0 = infinite)", 0, true, 0.0);
+	g_hCVPlayerMaxlevelReset = CreateConVar("smrpg_player_maxlevel_reset", "0", "Reset the player to level 1, if the player reaches the player maxlevel?", 0, true, 0.0, true, 1.0);
+	
+	g_hCVBotKillPlayer = CreateConVar("smrpg_bot_kill_player", "1", "Bots earn experience for interacting with real players?", 0, true, 0.0, true, 1.0);
+	g_hCVPlayerKillBot = CreateConVar("smrpg_player_kill_bot", "1", "Real players earn experience for interacting with bots?", 0, true, 0.0, true, 1.0);
+	g_hCVBotKillBot = CreateConVar("smrpg_bot_kill_bot", "1", "Bots earn experience for interacting with bots?", 0, true, 0.0, true, 1.0);
+	
+	g_hCVAnnounceNewLvl = CreateConVar("smrpg_announce_newlvl", "1", "Global announcement when a player reaches a new level (1 = enable, 0 = disable)", 0, true, 0.0, true, 1.0);
+	g_hCVAFKTime = CreateConVar("smrpg_afk_time", "30", "After how many seconds of idleing is the player flagged as AFK? (0 = off)", 0, true, 0.0);
+	g_hCVSpawnProtect = CreateConVar("smrpg_spawn_protect_noxp", "1", "Don't give any experience for actions against players who just spawned and haven't pressed any buttons yet?", 0, true, 0.0, true, 1.0);
+	
+	g_hCVExpNotice = CreateConVar("smrpg_exp_notice", "1", "Sends notifications to players when they gain Experience", 0, true, 0.0, true, 1.0);
+	g_hCVExpMax = CreateConVar("smrpg_exp_max", "50000", "Maximum experience that will ever be required", 0, true, 0.0);
+	g_hCVExpStart = CreateConVar("smrpg_exp_start", "250", "Experience required for Level 1", 0, true, 0.0);
+	g_hCVExpInc = CreateConVar("smrpg_exp_inc", "50", "Increment experience required for each level (until smrpg_exp_max)", 0, true, 0.0);
+	
+	g_hCVExpDamage = CreateConVar("smrpg_exp_damage", "1.0", "Experience for hurting an enemy multiplied by the damage done", 0, true, 0.0);
+	g_hCVExpKill = CreateConVar("smrpg_exp_kill", "15.0", "Experience for a kill multiplied by the victim's level", 0, true, 0.0);
+	g_hCVExpKillBonus = CreateConVar("smrpg_exp_kill_bonus", "0.0", "Extra constant experience to give on top of the regular experience on a kill.", 0, true, 0.0);
+	g_hCVExpKillMax = CreateConVar("smrpg_exp_kill_max", "0.0", "Maximum experience a player can ever earn for killing someone. (0 = unlimited)", 0, true, 0.0);
+	
+	g_hCVExpTeamwin = CreateConVar("smrpg_exp_teamwin", "0.15", "Experience multipled by the experience required and the team ratio given to a team for completing the objective", 0, true, 0.0);
+	CreateConVar("smrpg_exp_use_teamratio", "1", "Scale the experience for team events by the team ratio? This is e.g. used to lower the amount of experience earned, when a winning team has more players than the other.", 0, true, 0.0, true, 1.0);
+	
+	g_hCVLastExperienceCount = CreateConVar("smrpg_lastexperience_count", "50", "How many times should we remember why each player got some experience in the recent past?", 0, true, 1.0);
+	
+	g_hCVLevelStart = CreateConVar("smrpg_level_start", "1", "Starting level for new players.", 0, true, 1.0);
+	g_hCVLevelStartGiveCredits = CreateConVar("smrpg_level_start_give_credits", "1", "Give the players the credits for all additional start levels as if they'd leveled up themselves?", 0, true, 0.0, true, 1.0);
+	g_hCVUpgradeStartLevelsFree = CreateConVar("smrpg_upgrade_start_levels_free", "1", "Don't charge the players for the initial upgrade levels (smrpg_<upgr>_startlevel)?", 0, true, 0.0, true, 1.0);
+	g_hCVCreditsInc = CreateConVar("smrpg_credits_inc", "5", "Credits given to each new level", 0, true, 0.0);
+	g_hCVCreditsStart = CreateConVar("smrpg_credits_start", "0", "Starting credits for Level 1", 0, true, 0.0);
+	g_hCVSalePercent = CreateConVar("smrpg_sale_percent", "0.75", "Percentage of credits a player gets for selling an upgrade", 0, true, 0.0);
+	g_hCVAllowSellDisabled = CreateConVar("smrpg_allow_sell_disabled_upgrade", "0", "Allow players to sell a level of an upgrade they already purchased even if the upgrade is disabled?", 0, true, 0.0, true, 1.0);
+	g_hCVIgnoreLevelBarrier = CreateConVar("smrpg_ignore_level_barrier", "0", "Ignore the hardcoded maxlevels for the upgrades and allow to set the maxlevel as high as you want. THIS MIGHT BE BAD!", 0, true, 0.0, true, 1.0);
+	g_hCVAllowPresentUpgradeUsage = CreateConVar("smrpg_allow_present_upgrade_usage", "0", "Allow players to use the upgrades they already have levels for, if they normally wouldn't have access to the upgrade due to the adminflags.\nThis allows admins to give upgrades to players they aren't able to buy themselves.", 0, true, 0.0, true, 1.0);
+	g_hCVDisableLevelSelection = CreateConVar("smrpg_disable_level_selection", "0", "Don't allow players to change the selected levels of their upgrades to a lower level than they already purchased?", 0, true, 0.0, true, 1.0);
+	g_hCVShowMaxLevelInMenu = CreateConVar("smrpg_show_maxlevel_in_menu", "0", "Show the maxlevel of an upgrade in the upgrade buy, sell and info menus?", 0, true, 0.0, true, 1.0);
+	g_hCVShowUpgradesOfOtherTeam = CreateConVar("smrpg_show_upgrades_teamlock", "1", "Show the upgrades if they are locked to the other team?\n\t0: Don't show teamlocked upgrades at all.\n\t1: Show upgrades if the player already bought a level while being in the other team.\n\t2: Always show all upgrades.", 0, true, 0.0, true, 2.0);
+	g_hCVBuyUpgradesOfOtherTeam = CreateConVar("smrpg_buy_upgrades_teamlock", "0", "Allow players to buy upgrades of the other team, even if they can't use them in the current team?", 0, true, 0.0, true, 1.0);
+	g_hCVShowTeamlockNoticeOwnTeam = CreateConVar("smrpg_show_teamlock_notice_own_team", "0", "Always show the team restriction of the upgrade in the menu, even if the player is in the correct team?", 0, true, 0.0, true, 1.0);
+	
+	g_hCVShowUpgradePurchase = CreateConVar("smrpg_show_upgrade_purchase_in_chat", "0", "Show a message to all in chat when a player buys an upgrade.", 0, true, 0.0, true, 1.0);
+	g_hCVShowMenuOnLevelDefault = CreateConVar("smrpg_show_menu_on_levelup", "0", "Show the rpg menu when a player levels up by default? Players can change it in their settings individually afterwards.", 0, true, 0.0, true, 1.0);
+	g_hCVFadeOnLevelDefault = CreateConVar("smrpg_fade_screen_on_levelup", "1", "Fade the screen golden when a player levels up by default? Players can change it in their settings individually afterwards.", 0, true, 0.0, true, 1.0);
+	
+	g_hCVFadeOnLevelColor = CreateConVar("smrpg_fade_screen_on_levelup_color", "255 215 0 40", "RGBA color to fade the screen in for a short time after levelup. Default is a golden shine.", 0);
+}
+
+void SetupConVarHooks()
+{
+	// Set up hooks after ConVars are created
+	g_hCVEnable.AddChangeHook(ConVar_EnableChanged);
+	g_hCVSaveInterval.AddChangeHook(ConVar_SaveIntervalChanged);
+	g_hCVLastExperienceCount.AddChangeHook(ConVar_LastExperienceCountChanged);
 }
 
 /**
@@ -352,6 +364,14 @@ public void OnPluginEnd()
 	// Try to save the stats!
 	if(g_hDatabase != null)
 		SaveAllPlayers();
+
+	for (int i = 0; i < MAXPRESTIGE; i++)
+    {
+        if (g_hPrestigeUpgrades[i] != null)
+        {
+            delete g_hPrestigeUpgrades[i];
+        }
+    }
 }
 
 public void OnConfigsExecuted()
@@ -368,6 +388,8 @@ public void OnConfigsExecuted()
 	
 	ClearHandle(g_hPlayerAutoSave);
 	g_hPlayerAutoSave = CreateTimer(g_hCVSaveInterval.FloatValue, Timer_SavePlayers, _, TIMER_REPEAT);
+
+	LoadPrestigeUpgrades();
 }
 
 public void OnLibraryAdded(const char[] name)

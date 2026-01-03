@@ -171,4 +171,43 @@
 	{
 		"es"			"ADVERTENCIA: Perderá todos sus Niveles, Creditos, y Experiencia.\n¿Está seguro?"
 	}
+	"Confirm reset prestige"
+	{
+		"es"	"¿Estás seguro de que quieres restablecer el prestigio de %N?"
+	}
+
+	"Confirm set prestige"
+	{
+		"es"	"¿Estás seguro de que quieres establecer el prestigio de %N en %d?"
+	}
+
+	"Manage Prestige"
+	{
+		"es"	"Gestionar prestigio"
+	}
+
+	"Reset Prestige to 0"
+	{
+		"es"	"Restablecer prestigio a 0"
+	}
+
+	"Current Prestige"
+	{
+		"es"	"Prestigio actual"
+	}
+
+	"Prestige"
+	{
+		"es"	"Prestigio"
+	}
+
+	"Inform player prestige reset"
+	{
+		"es"	"Has restablecido el prestigio de %N"
+	}
+
+	"Inform player prestige set"
+	{
+		"es"	"Has establecido el prestigio de %N en %d"
+	}
 }

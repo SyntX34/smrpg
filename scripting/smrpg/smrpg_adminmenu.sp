@@ -144,12 +144,17 @@ void ShowPlayerDetailMenu(int client)
 	hMenu.AddItem("stats", sBuffer);
 	Format(sBuffer, sizeof(sBuffer), "%T", "Manage upgrades", client);
 	hMenu.AddItem("upgrades", sBuffer);
+	int iCurrentPrestige = SMRPG_GetClientPrestigeLevel(iTarget);
+	Format(sBuffer, sizeof(sBuffer), "%T (Current: %d)", "Manage Prestige", client, iCurrentPrestige);
+	hMenu.AddItem("prestige", sBuffer);
 	if(CheckCommandAccess(client, "smrpg_resetstats", ADMFLAG_ROOT))
 	{
 		Format(sBuffer, sizeof(sBuffer), "%T", "Reset player", client);
 		hMenu.AddItem("reset", sBuffer);
 	}
 	hMenu.AddItem("", "", ITEMDRAW_DISABLED|ITEMDRAW_SPACER);
+	Format(sBuffer, sizeof(sBuffer), "%T: %d", "Prestige", client, iCurrentPrestige);
+	hMenu.AddItem("", sBuffer, ITEMDRAW_DISABLED);
 	Format(sBuffer, sizeof(sBuffer), "%T", "Level", client, GetClientLevel(iTarget));
 	hMenu.AddItem("", sBuffer, ITEMDRAW_DISABLED);
 	Format(sBuffer, sizeof(sBuffer), "%T", "Experience short", client, GetClientExperience(iTarget), Stats_LvlToExp(GetClientLevel(iTarget)));
@@ -189,6 +194,10 @@ public int Menu_HandlePlayerDetails(Menu menu, MenuAction action, int param1, in
 		else if(StrEqual(sInfo, "upgrades"))
 		{
 			ShowPlayerUpgradeManageMenu(param1);
+		}
+		else if(StrEqual(sInfo, "prestige"))
+		{
+			ShowPlayerPrestigeMenu(param1);
 		}
 		else if(StrEqual(sInfo, "reset"))
 		{
@@ -244,6 +253,198 @@ public int Menu_HandlePlayerResetConfirm(Menu menu, MenuAction action, int param
 		Format(sBuffer, sizeof(sBuffer), "%T", sDisplay, param1);
 
 		/* Override the text */
+		return RedrawMenuItem(sBuffer);
+	}
+	return 0;
+}
+
+void ShowPlayerPrestigeMenu(int client)
+{
+	int iTarget = g_iCurrentMenuTarget[client];
+	int iCurrentPrestige = SMRPG_GetClientPrestigeLevel(iTarget);
+	
+	Menu hMenu = new Menu(Menu_HandlePrestigeSelect);
+	hMenu.SetTitle("%T > %N\n%T: %d", "Manage Prestige", client, iTarget, "Current Prestige", client, iCurrentPrestige);
+	hMenu.ExitBackButton = true;
+	
+	char sBuffer[128], sInfo[16];
+	
+	// Option to reset prestige to 0
+	Format(sBuffer, sizeof(sBuffer), "%T", "Reset Prestige to 0", client);
+	Format(sInfo, sizeof(sInfo), "reset");
+	hMenu.AddItem(sInfo, sBuffer);
+	
+	hMenu.AddItem("", "", ITEMDRAW_SPACER);
+	
+	// List all prestige levels
+	for(int i = 0; i <= 8; i++)
+	{
+		Format(sBuffer, sizeof(sBuffer), "Prestige %d", i);
+		if(i == iCurrentPrestige)
+			Format(sBuffer, sizeof(sBuffer), "%s (Current)", sBuffer);
+		
+		Format(sInfo, sizeof(sInfo), "set_%d", i);
+		hMenu.AddItem(sInfo, sBuffer);
+	}
+	
+	hMenu.Display(client, MENU_TIME_FOREVER);
+}
+
+public int Menu_HandlePrestigeSelect(Menu menu, MenuAction action, int param1, int param2)
+{
+	if(action == MenuAction_End)
+	{
+		delete menu;
+	}
+	else if(action == MenuAction_Cancel)
+	{
+		if(param2 == MenuCancel_ExitBack)
+			ShowPlayerDetailMenu(param1);
+		else
+			g_iCurrentMenuTarget[param1] = -1;
+	}
+	else if(action == MenuAction_Select)
+	{
+		char sInfo[32];
+		menu.GetItem(param2, sInfo, sizeof(sInfo));
+		
+		int iTarget = g_iCurrentMenuTarget[param1];
+		
+		if(StrEqual(sInfo, "reset"))
+		{
+			Menu hConfirm = new Menu(Menu_HandlePrestigeResetConfirm, MENU_ACTIONS_DEFAULT|MenuAction_DisplayItem);
+			hConfirm.ExitBackButton = true;
+			hConfirm.SetTitle("%T", "Confirm reset prestige", param1, iTarget);
+			hConfirm.AddItem("yes", "Yes");
+			hConfirm.AddItem("no", "No");
+			hConfirm.Display(param1, MENU_TIME_FOREVER);
+		}
+		else if(StrContains(sInfo, "set_") == 0)
+		{
+			char sPrestige[8];
+			strcopy(sPrestige, sizeof(sPrestige), sInfo[4]);
+			int iPrestige = StringToInt(sPrestige);
+			
+			if(iPrestige >= 0 && iPrestige <= 8)
+			{
+				Menu hConfirm = new Menu(Menu_HandlePrestigeSetConfirm, MENU_ACTIONS_DEFAULT|MenuAction_DisplayItem);
+				hConfirm.ExitBackButton = true;
+				hConfirm.SetTitle("%T", "Confirm set prestige", param1, iTarget, iPrestige);
+				hConfirm.AddItem(sPrestige, "Yes");
+				hConfirm.AddItem("no", "No");
+				hConfirm.Display(param1, MENU_TIME_FOREVER);
+			}
+			else
+			{
+				ShowPlayerPrestigeMenu(param1);
+			}
+		}
+	}
+	return 0;
+}public int Menu_HandlePrestigeResetConfirm(Menu menu, MenuAction action, int param1, int param2)
+{
+	if(action == MenuAction_End)
+	{
+		delete menu;
+	}
+	else if(action == MenuAction_Cancel)
+	{
+		if(param2 == MenuCancel_ExitBack)
+			ShowPlayerPrestigeMenu(param1);
+		else
+			g_iCurrentMenuTarget[param1] = -1;
+	}
+	else if(action == MenuAction_Select)
+	{
+		char sInfo[32];
+		menu.GetItem(param2, sInfo, sizeof(sInfo));
+		
+		if(StrEqual(sInfo, "no"))
+		{
+			ShowPlayerPrestigeMenu(param1);
+			return 0;
+		}
+		
+		int iTarget = g_iCurrentMenuTarget[param1];
+		int iOldPrestige = SMRPG_GetClientPrestigeLevel(iTarget);
+		
+		// Reset prestige to 0
+		SMRPG_SetClientPrestigeLevel(iTarget, 0);
+		
+		// Reset prestige multipliers
+		SMRPG_SetClientPrestigeXPMultiplier(iTarget, 1.0);
+		SMRPG_SetClientPrestigeCreditMultiplier(iTarget, 1.0);
+		
+		// Clear unlocked skills
+		ArrayList unlockedSkills = SMRPG_GetClientPrestigeUnlockedSkills(iTarget);
+		if(unlockedSkills != null)
+		{
+			unlockedSkills.Clear();
+		}
+		
+		// Reset max level
+		SMRPG_SetClientPrestigeMaxLevel(iTarget, 0);
+		
+		LogAction(param1, iTarget, "%L reset prestige of %L from %d to 0", param1, iTarget, iOldPrestige);
+		Client_PrintToChat(param1, false, "SM:RPG prestigereset: %T", "Inform player prestige reset", param1, iTarget);
+		
+		ShowPlayerPrestigeMenu(param1);
+	}
+	else if(action == MenuAction_DisplayItem)
+	{
+		char sDisplay[64];
+		menu.GetItem(param2, "", 0, _, sDisplay, sizeof(sDisplay));
+		char sBuffer[255];
+		Format(sBuffer, sizeof(sBuffer), "%T", sDisplay, param1);
+		return RedrawMenuItem(sBuffer);
+	}
+	return 0;
+}
+
+public int Menu_HandlePrestigeSetConfirm(Menu menu, MenuAction action, int param1, int param2)
+{
+	if(action == MenuAction_End)
+	{
+		delete menu;
+	}
+	else if(action == MenuAction_Cancel)
+	{
+		if(param2 == MenuCancel_ExitBack)
+			ShowPlayerPrestigeMenu(param1);
+		else
+			g_iCurrentMenuTarget[param1] = -1;
+	}
+	else if(action == MenuAction_Select)
+	{
+		char sInfo[32];
+		menu.GetItem(param2, sInfo, sizeof(sInfo));
+		
+		if(StrEqual(sInfo, "no"))
+		{
+			ShowPlayerPrestigeMenu(param1);
+			return 0;
+		}
+		
+		int iTarget = g_iCurrentMenuTarget[param1];
+		int iNewPrestige = StringToInt(sInfo);
+		int iOldPrestige = SMRPG_GetClientPrestigeLevel(iTarget);
+		
+		if(iNewPrestige >= 0 && iNewPrestige <= 8)
+		{
+			SMRPG_SetClientPrestigeLevel(iTarget, iNewPrestige);
+			
+			LogAction(param1, iTarget, "%L set prestige of %L from %d to %d", param1, iTarget, iOldPrestige, iNewPrestige);
+			Client_PrintToChat(param1, false, "SM:RPG prestigeset: %T", "Inform player prestige set", param1, iTarget, iNewPrestige);
+		}
+		
+		ShowPlayerPrestigeMenu(param1);
+	}
+	else if(action == MenuAction_DisplayItem)
+	{
+		char sDisplay[64];
+		menu.GetItem(param2, "", 0, _, sDisplay, sizeof(sDisplay));
+		char sBuffer[255];
+		Format(sBuffer, sizeof(sBuffer), "%T", sDisplay, param1);
 		return RedrawMenuItem(sBuffer);
 	}
 	return 0;

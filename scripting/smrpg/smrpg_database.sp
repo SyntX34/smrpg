@@ -6,14 +6,17 @@
 #define TBL_PLAYERUPGRADES "player_upgrades"
 #define TBL_UPGRADES "upgrades"
 #define TBL_SETTINGS "settings"
+#define TBL_PRESTIGE "prestige"
 
 #define DBVER_INIT 100       // Initial database version
 #define DBVER_UPDATE_1 101   // Update 01.09.2014. Store steamids in accountid form instead of STEAM_X:Y:Z (steamid column varchar -> int)
 #define DBVER_UPDATE_2 102   // Update 16.01.2018. Change table character set to utf8mb4 to allow new characters. Requires MySQL 5.5.3+.
 #define DBVER_UPDATE_3 103   // Update 28.02.2018. Add foreign keys to avoid data pollution.
+#define DBVER_UPDATE_4 104   // Update 03.01.2026. Add prestige support
 
 // Newest database version
-#define DATABASE_VERSION DBVER_UPDATE_3
+//#define DATABASE_VERSION DBVER_UPDATE_3
+#define DATABASE_VERSION DBVER_UPDATE_4 
 
 // How long to wait for a reconnect after a failed connection attempt to the database?
 #define RECONNECT_INTERVAL 360.0
@@ -49,12 +52,12 @@ void RegisterDatabaseForwards()
 
 void InitDatabase()
 {
-	ClearHandle(g_hReconnectTimer);
-	
-	if(SQL_CheckConfig(SMRPG_DB))
-		Database.Connect(SQL_OnConnect, SMRPG_DB);
-	else
-		Database.Connect(SQL_OnConnect, "default"); // Default to 'default' section in the databases.cfg.
+    ClearHandle(g_hReconnectTimer);
+    
+    if(SQL_CheckConfig(SMRPG_DB))
+        Database.Connect(SQL_OnConnect, SMRPG_DB);
+    else
+        Database.Connect(SQL_OnConnect, "default");
 }
 
 public void SQL_OnConnect(Database db, const char[] error, any data)
@@ -104,7 +107,7 @@ public void SQL_OnConnect(Database db, const char[] error, any data)
 	
 	// Create the player table
 	char sQuery[1024];
-	Format(sQuery, sizeof(sQuery), "CREATE TABLE IF NOT EXISTS %s (player_id INTEGER PRIMARY KEY %s, name VARCHAR(64) NOT NULL DEFAULT ' ', steamid INTEGER DEFAULT NULL UNIQUE, level INTEGER DEFAULT 1, experience INTEGER DEFAULT 0, credits INTEGER DEFAULT 0, showmenu INTEGER DEFAULT 1, fadescreen INTEGER DEFAULT 1, lastseen INTEGER DEFAULT 0, lastreset INTEGER DEFAULT 0)%s", TBL_PLAYERS, (g_DriverType == Driver_MySQL ? "AUTO_INCREMENT" : "AUTOINCREMENT"), sExtraOptions);
+    Format(sQuery, sizeof(sQuery), "CREATE TABLE IF NOT EXISTS %s (player_id INTEGER PRIMARY KEY %s, name VARCHAR(64) NOT NULL DEFAULT ' ', steamid INTEGER DEFAULT NULL UNIQUE, level INTEGER DEFAULT 1, experience INTEGER DEFAULT 0, credits INTEGER DEFAULT 0, showmenu INTEGER DEFAULT 1, fadescreen INTEGER DEFAULT 1, lastseen INTEGER DEFAULT 0, lastreset INTEGER DEFAULT 0)%s", TBL_PLAYERS, (g_DriverType == Driver_MySQL ? "AUTO_INCREMENT" : "AUTOINCREMENT"), sExtraOptions);
 	if(!SQL_LockedFastQuery(g_hDatabase, sQuery))
 	{
 		char sError[256];
@@ -112,6 +115,20 @@ public void SQL_OnConnect(Database db, const char[] error, any data)
 		SetFailState("Error creating %s table: %s", TBL_PLAYERS, sError);
 		return;
 	}
+
+	Format(sQuery, sizeof(sQuery), 
+        "CREATE TABLE IF NOT EXISTS %s (prestige_id INTEGER PRIMARY KEY %s, player_id INTEGER NOT NULL, prestige_level INTEGER DEFAULT 0, prestige_skillpoints INTEGER DEFAULT 0, prestige_xp_multiplier FLOAT DEFAULT 1.0, prestige_credit_multiplier FLOAT DEFAULT 1.0, prestige_vip_seconds INTEGER DEFAULT 0, prestige_unlocked_skills TEXT, prestige_max_level INTEGER DEFAULT 0, FOREIGN KEY (player_id) REFERENCES %s(player_id) ON DELETE CASCADE)%s", 
+        TBL_PRESTIGE, 
+        (g_DriverType == Driver_MySQL ? "AUTO_INCREMENT" : "AUTOINCREMENT"), 
+        TBL_PLAYERS, 
+        sExtraOptions
+    );
+	if(!SQL_LockedFastQuery(g_hDatabase, sQuery))
+    {
+        char sError[256];
+        SQL_GetError(g_hDatabase, sError, sizeof(sError));
+        LogError("Error creating %s table: %s", TBL_PRESTIGE, sError);
+    }
 	
 	// Create the upgrades table.
 	Format(sQuery, sizeof(sQuery), "CREATE TABLE IF NOT EXISTS %s (upgrade_id INTEGER PRIMARY KEY %s, shortname VARCHAR(32) UNIQUE NOT NULL, date_added INTEGER)%s", TBL_UPGRADES, (g_DriverType == Driver_MySQL ? "AUTO_INCREMENT" : "AUTOINCREMENT"), sExtraOptions);
@@ -144,6 +161,7 @@ public void SQL_OnConnect(Database db, const char[] error, any data)
 	}
 	
 	LoadSettingsTable();
+	CheckDatabaseVersion();
 
 	// This is probably empty since no upgrades could have registered yet, but well..
 	// Add all columns for currently loaded upgrades.
@@ -444,6 +462,110 @@ void CheckDatabaseVersion()
 				{
 					FailDatabaseUpdateError(DBVER_UPDATE_3, sQuery);
 					return;
+				}
+			}
+		}
+
+		if(iVersion < DBVER_UPDATE_4)
+		{
+			// Add prestige table (already created in InitDatabase, but handle column additions)
+			
+			// For MySQL: Add prestige_level column to players table
+			if(g_DriverType == Driver_MySQL)
+			{
+				char sQuery[512];
+				Format(sQuery, sizeof(sQuery), 
+					"ALTER TABLE %s ADD COLUMN IF NOT EXISTS prestige_level INTEGER DEFAULT 0", 
+					TBL_PLAYERS
+				);
+				
+				if(!SQL_LockedFastQuery(g_hDatabase, sQuery))
+				{
+					FailDatabaseUpdateError(DBVER_UPDATE_4, sQuery);
+					return;
+				}
+			}
+			else // SQLite - handle properly
+			{
+				// Check if prestige_level column exists in players table
+				char sQuery[512];
+				Format(sQuery, sizeof(sQuery), 
+					"SELECT COUNT(*) FROM pragma_table_info('%s') WHERE name='prestige_level'", 
+					TBL_PLAYERS
+				);
+				
+				DBResultSet results = SQL_Query(g_hDatabase, sQuery);
+				if(results == null)
+				{
+					// Table might not exist? This shouldn't happen as we created it above
+					char sError[256];
+					SQL_GetError(g_hDatabase, sError, sizeof(sError));
+					LogError("Error checking for prestige_level column: %s", sError);
+				}
+				else
+				{
+					if(results.FetchRow())
+					{
+						int columnExists = results.FetchInt(0);
+						if(columnExists == 0)
+						{
+							SQL_LockedFastQuery(g_hDatabase, "PRAGMA foreign_keys=OFF");
+							
+							// Create new table with prestige_level column
+							Format(sQuery, sizeof(sQuery),
+								"CREATE TABLE %s_new ( \
+									player_id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(64) NOT NULL DEFAULT ' ', steamid INTEGER DEFAULT NULL UNIQUE, \
+									level INTEGER DEFAULT 1, experience INTEGER DEFAULT 0, credits INTEGER DEFAULT 0, showmenu INTEGER DEFAULT 1, fadescreen INTEGER DEFAULT 1, lastseen INTEGER DEFAULT 0, lastreset INTEGER DEFAULT 0, prestige_level INTEGER DEFAULT 0)",
+								TBL_PLAYERS
+							);
+							
+							if(!SQL_LockedFastQuery(g_hDatabase, sQuery))
+							{
+								SQL_LockedFastQuery(g_hDatabase, "PRAGMA foreign_keys=ON");
+								FailDatabaseUpdateError(DBVER_UPDATE_4, sQuery);
+								return;
+							}
+							
+							// Copy data from old table to new table
+							Format(sQuery, sizeof(sQuery),
+								"INSERT INTO %s_new SELECT player_id, name, steamid, level, experience, credits, showmenu, fadescreen, lastseen, lastreset, 0 FROM %s",
+								TBL_PLAYERS, TBL_PLAYERS
+							);
+							
+							if(!SQL_LockedFastQuery(g_hDatabase, sQuery))
+							{
+								SQL_LockedFastQuery(g_hDatabase, "PRAGMA foreign_keys=ON");
+								FailDatabaseUpdateError(DBVER_UPDATE_4, sQuery);
+								return;
+							}
+							
+							// Drop old table
+							Format(sQuery, sizeof(sQuery), "DROP TABLE %s", TBL_PLAYERS);
+							if(!SQL_LockedFastQuery(g_hDatabase, sQuery))
+							{
+								SQL_LockedFastQuery(g_hDatabase, "PRAGMA foreign_keys=ON");
+								FailDatabaseUpdateError(DBVER_UPDATE_4, sQuery);
+								return;
+							}
+							
+							// Rename new table to original name
+							Format(sQuery, sizeof(sQuery), "ALTER TABLE %s_new RENAME TO %s", TBL_PLAYERS, TBL_PLAYERS);
+							if(!SQL_LockedFastQuery(g_hDatabase, sQuery))
+							{
+								SQL_LockedFastQuery(g_hDatabase, "PRAGMA foreign_keys=ON");
+								FailDatabaseUpdateError(DBVER_UPDATE_4, sQuery);
+								return;
+							}
+							
+							// Recreate indexes
+							Format(sQuery, sizeof(sQuery), "CREATE UNIQUE INDEX IF NOT EXISTS idx_steamid ON %s(steamid)", TBL_PLAYERS);
+							SQL_LockedFastQuery(g_hDatabase, sQuery);
+							
+							// Turn foreign keys back on
+							SQL_LockedFastQuery(g_hDatabase, "PRAGMA foreign_keys=ON");
+						}
+					}
+					delete results;
 				}
 			}
 			

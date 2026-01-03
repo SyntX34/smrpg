@@ -171,4 +171,43 @@
 	{
 		"da"			"ADvarsel: Du vil miste alle Levels, Kredits, og Xp.\nNulstil stats permanent?"
 	}
+	"Confirm reset prestige"
+	{
+		"da"	"Er du sikker på, at du vil nulstille prestigen for %N?"
+	}
+
+	"Confirm set prestige"
+	{
+		"da"	"Er du sikker på, at du vil sætte prestigen for %N til %d?"
+	}
+
+	"Manage Prestige"
+	{
+		"da"	"Administrer prestige"
+	}
+
+	"Reset Prestige to 0"
+	{
+		"da"	"Nulstil prestige til 0"
+	}
+
+	"Current Prestige"
+	{
+		"da"	"Nuværende prestige"
+	}
+
+	"Prestige"
+	{
+		"da"	"Prestige"
+	}
+
+	"Inform player prestige reset"
+	{
+		"da"	"Du har nulstillet prestigen for %N"
+	}
+
+	"Inform player prestige set"
+	{
+		"da"	"Du har sat prestigen for %N til %d"
+	}
 }

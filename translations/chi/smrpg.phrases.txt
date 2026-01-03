@@ -818,4 +818,43 @@
 		// 1: Value of smrpg_lastexperience_count. The amount of experience saved in the array.
 		"chi"			"输入 {N}rpgexp{G} 查看最新列表 {1} 您获得的经验的原因和数量。"
 	}
+	"Confirm reset prestige"
+	{
+		"chi"	"你确定要重置 %N 的声望吗？"
+	}
+
+	"Confirm set prestige"
+	{
+		"chi"	"你确定要将 %N 的声望设置为 %d 吗？"
+	}
+
+	"Manage Prestige"
+	{
+		"chi"	"管理声望"
+	}
+
+	"Reset Prestige to 0"
+	{
+		"chi"	"将声望重置为 0"
+	}
+
+	"Current Prestige"
+	{
+		"chi"	"当前声望"
+	}
+
+	"Prestige"
+	{
+		"chi"	"声望"
+	}
+
+	"Inform player prestige reset"
+	{
+		"chi"	"你已重置 %N 的声望"
+	}
+
+	"Inform player prestige set"
+	{
+		"chi"	"你已将 %N 的声望设置为 %d"
+	}
 }

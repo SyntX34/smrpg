@@ -871,4 +871,43 @@
 		"#format" "{1:d}"
 		"en"			"Type {N}rpgexp{G} to see a list of the latest {1} reasons and amounts of experience you've earned."
 	}
+	"Confirm reset prestige"
+	{
+		"en"	"Are you sure you want to reset %N's prestige?"
+	}
+
+	"Confirm set prestige"
+	{
+		"en"	"Are you sure you want to set %N's prestige to %d?"
+	}
+
+	"Manage Prestige"
+	{
+		"en"	"Manage Prestige"
+	}
+
+	"Reset Prestige to 0"
+	{
+		"en"	"Reset Prestige to 0"
+	}
+
+	"Current Prestige"
+	{
+		"en"	"Current Prestige"
+	}
+
+	"Prestige"
+	{
+		"en"	"Prestige"
+	}
+
+	"Inform player prestige reset"
+	{
+		"en"	"You have reset the prestige of %N"
+	}
+
+	"Inform player prestige set"
+	{
+		"en"	"You have set %N's prestige to %d"
+	}
 }

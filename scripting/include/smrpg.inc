@@ -115,5 +115,21 @@ public void __pl_smrpg_SetNTVOptional()
 	// smrpg_settings
 	MarkNativeAsOptional("SMRPG_GetSetting");
 	MarkNativeAsOptional("SMRPG_SetSetting");
+
+	MarkNativeAsOptional("SMRPG_GetClientPrestigeLevel");
+	MarkNativeAsOptional("SMRPG_SetClientPrestigeLevel");
+	MarkNativeAsOptional("SMRPG_GetClientPrestigeXPMultiplier");
+	MarkNativeAsOptional("SMRPG_GetClientPrestigeCreditMultiplier");
+	MarkNativeAsOptional("SMRPG_GetClientPrestigeSkillPoints");
+	MarkNativeAsOptional("SMRPG_SetClientPrestigeSkillPoints");
+	MarkNativeAsOptional("SMRPG_ResetClientToPrestige");
+	MarkNativeAsOptional("SMRPG_IsClientEligibleForPrestige");
+	
+	MarkNativeAsOptional("SMRPG_GetClientPrestigeMaxLevel");
+	MarkNativeAsOptional("SMRPG_SetClientPrestigeMaxLevel");
+	MarkNativeAsOptional("SMRPG_GetClientPrestigeUnlockedSkills");
+
+	MarkNativeAsOptional("SMRPG_SetClientPrestigeXPMultiplier");
+	MarkNativeAsOptional("SMRPG_SetClientPrestigeCreditMultiplier");
 }
 #endif

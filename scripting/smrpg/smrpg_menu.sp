@@ -2,6 +2,8 @@
 #include <sourcemod>
 #include <topmenus>
 
+#define MAXPRESTIGE 10
+
 TopMenu g_hRPGTopMenu;
 
 TopMenuObject g_TopMenuUpgrades;
@@ -15,8 +17,15 @@ Menu g_hConfirmResetStatsMenu;
 
 Handle g_hfwdOnRPGMenuCreated;
 Handle g_hfwdOnRPGMenuReady;
+ArrayList g_hPrestigeUpgrades[MAXPRESTIGE] = {null, ...};
 
 int g_iSelectedSettingsUpgrade[MAXPLAYERS+1] = {-1,...};
+
+enum struct PrestigeUpgradeInfo
+{
+    int requiredLevel;
+    char shortName[MAX_UPGRADE_SHORTNAME_LENGTH];
+}
 
 /**
  * Setup functions to create the topmenu and API.
@@ -34,6 +43,125 @@ void RegisterTopMenu()
 	g_TopMenuHelp = g_hRPGTopMenu.AddCategory(RPGMENU_HELP, TopMenu_DefaultCategoryHandler);
 }
 
+public Action Cmd_DebugPrestige(int client, int args)
+{
+    if (!client)
+    {
+        ReplyToCommand(client, "This command must be run in-game");
+        return Plugin_Handled;
+    }
+    
+    int iPrestige = SMRPG_GetClientPrestigeLevel(client);
+    int iLevel = SMRPG_GetClientLevel(client);
+    
+    PrintToChat(client, "========== PRESTIGE DEBUG ==========");
+    PrintToChat(client, "Your Prestige: %d | Level: %d", iPrestige, iLevel);
+    
+    // Check if prestige upgrades are loaded
+    if (g_hPrestigeUpgrades[iPrestige] == null)
+    {
+        PrintToChat(client, "[ERROR] Prestige %d config is NULL!", iPrestige);
+        PrintToChat(client, "Attempting to reload...");
+        
+        LoadPrestigeUpgrades();
+        
+        if (g_hPrestigeUpgrades[iPrestige] == null)
+        {
+            PrintToChat(client, "[ERROR] Still NULL after reload!");
+            PrintToChat(client, "Check server console for errors");
+            return Plugin_Handled;
+        }
+    }
+    
+    int iConfiguredCount = g_hPrestigeUpgrades[iPrestige].Length;
+    PrintToChat(client, "Prestige %d has %d upgrades configured", iPrestige, iConfiguredCount);
+    
+    if (iConfiguredCount == 0)
+    {
+        PrintToChat(client, "[WARNING] No upgrades configured for prestige %d!", iPrestige);
+        return Plugin_Handled;
+    }
+    
+    PrintToChat(client, "---------- Configured Upgrades ----------");
+    
+    // List configured upgrades for this prestige
+    PrestigeUpgradeInfo upgradeInfo;
+    for (int i = 0; i < iConfiguredCount; i++)
+    {
+        g_hPrestigeUpgrades[iPrestige].GetArray(i, upgradeInfo);
+        
+        char status[32];
+        if (iLevel >= upgradeInfo.requiredLevel)
+            Format(status, sizeof(status), "AVAILABLE");
+        else
+            Format(status, sizeof(status), "LOCKED (need lvl %d)", upgradeInfo.requiredLevel);
+        
+        PrintToChat(client, "%d. %s - %s", i+1, upgradeInfo.shortName, status);
+    }
+    
+    PrintToChat(client, "---------- System Check ----------");
+    
+    // Check total upgrades in system
+    int iTotalUpgrades = GetUpgradeCount();
+    PrintToChat(client, "Total upgrades in system: %d", iTotalUpgrades);
+    
+    // Check how many are available vs restricted
+    int availableCount = 0;
+    int restrictedCount = 0;
+    int purchasedCount = 0;
+    
+    InternalUpgradeInfo upgrade;
+    for (int i = 0; i < iTotalUpgrades; i++)
+    {
+        if (!GetUpgradeByIndex(i, upgrade) || !IsValidUpgrade(upgrade))
+            continue;
+        
+        int purchased = GetClientPurchasedUpgradeLevel(client, i);
+        if (purchased > 0)
+        {
+            purchasedCount++;
+            continue; // Skip - already owned
+        }
+        
+        if (IsUpgradeAvailableForPlayer(client, i))
+            availableCount++;
+        else
+            restrictedCount++;
+    }
+    
+    PrintToChat(client, "Available to buy: %d", availableCount);
+    PrintToChat(client, "Restricted: %d", restrictedCount);
+    PrintToChat(client, "Already purchased: %d", purchasedCount);
+    
+    PrintToChat(client, "---------- Sample Upgrades ----------");
+    
+    // Show first 5 valid upgrades and their status
+    int checked = 0;
+    for (int i = 0; i < iTotalUpgrades && checked < 5; i++)
+    {
+        if (!GetUpgradeByIndex(i, upgrade) || !IsValidUpgrade(upgrade))
+            continue;
+        
+        int purchased = GetClientPurchasedUpgradeLevel(client, i);
+        bool available = IsUpgradeAvailableForPlayer(client, i);
+        
+        char status[64];
+        if (purchased > 0)
+            Format(status, sizeof(status), "OWNED (lvl %d)", purchased);
+        else if (available)
+            Format(status, sizeof(status), "AVAILABLE");
+        else
+            Format(status, sizeof(status), "RESTRICTED");
+        
+        PrintToChat(client, "%s: %s", upgrade.shortName, status);
+        checked++;
+    }
+    
+    PrintToChat(client, "====================================");
+    
+    return Plugin_Handled;
+}
+
 void RegisterTopMenuForwards()
 {
 	g_hfwdOnRPGMenuCreated = CreateGlobalForward("SMRPG_OnRPGMenuCreated", ET_Ignore, Param_Cell);
@@ -43,6 +171,125 @@ void RegisterTopMenuForwards()
 void RegisterTopMenuNatives()
 {
 	CreateNative("SMRPG_GetTopMenu", Native_GetTopMenu);
+}
+
+void LoadPrestigeUpgrades()
+{
+    // Clear existing cache
+    for (int i = 0; i < MAXPRESTIGE; i++)
+    {
+        if (g_hPrestigeUpgrades[i] != null)
+        {
+            delete g_hPrestigeUpgrades[i];
+            g_hPrestigeUpgrades[i] = null;
+        }
+    }
+    
+    // Load the prestige config
+    char sConfigPath[PLATFORM_MAX_PATH];
+    BuildPath(Path_SM, sConfigPath, sizeof(sConfigPath), "configs/smrpg/prestige.cfg");
+    
+    if (!FileExists(sConfigPath))
+    {
+        LogError("[PRESTIGE] Config file not found: %s", sConfigPath);
+        return;
+    }
+    
+    KeyValues kv = new KeyValues("Prestige");
+    if (!kv.ImportFromFile(sConfigPath))
+    {
+        delete kv;
+        LogError("[PRESTIGE] Failed to load prestige config: %s", sConfigPath);
+        return;
+    }
+    
+    LogMessage("[PRESTIGE] Loading prestige configuration...");
+    
+    // Load each prestige level
+    if (!kv.GotoFirstSubKey(false))
+    {
+        delete kv;
+        LogError("[PRESTIGE] No prestige levels found in config!");
+        return;
+    }
+    
+    do
+    {
+        char sPrestigeKey[12];
+        kv.GetSectionName(sPrestigeKey, sizeof(sPrestigeKey));
+        
+        int iPrestige = StringToInt(sPrestigeKey);
+        if (iPrestige < 0 || iPrestige >= MAXPRESTIGE)
+        {
+            LogError("[PRESTIGE] Invalid prestige level: %d (must be 0-%d)", iPrestige, MAXPRESTIGE-1);
+            continue;
+        }
+        
+        LogMessage("[PRESTIGE] Loading prestige level %d...", iPrestige);
+        
+        // Create ArrayList for this prestige
+        g_hPrestigeUpgrades[iPrestige] = new ArrayList(sizeof(PrestigeUpgradeInfo));
+        
+        // Load upgrades for this prestige
+        if (kv.JumpToKey("upgrades", false))
+        {
+            if (kv.GotoFirstSubKey(false))
+            {
+                PrestigeUpgradeInfo upgradeInfo;
+                
+                do
+                {
+                    char sLevelStr[12];
+                    kv.GetSectionName(sLevelStr, sizeof(sLevelStr));
+                    
+                    upgradeInfo.requiredLevel = StringToInt(sLevelStr);
+                    
+                    char sUpgradeList[256];
+                    kv.GetString(NULL_STRING, sUpgradeList, sizeof(sUpgradeList));
+                    
+                    // Parse comma-separated upgrade names
+                    char sUpgrades[32][MAX_UPGRADE_SHORTNAME_LENGTH];
+                    int upgradeCount = ExplodeString(sUpgradeList, ",", sUpgrades, sizeof(sUpgrades), sizeof(sUpgrades[]));
+                    
+                    for (int i = 0; i < upgradeCount; i++)
+                    {
+                        TrimString(sUpgrades[i]);
+                        
+                        if (strlen(sUpgrades[i]) > 0)
+                        {
+                            strcopy(upgradeInfo.shortName, sizeof(upgradeInfo.shortName), sUpgrades[i]);
+                            g_hPrestigeUpgrades[iPrestige].PushArray(upgradeInfo);
+                            
+                            LogMessage("[PRESTIGE] P%d: Added '%s' (unlock at level %d)", 
+                                iPrestige, upgradeInfo.shortName, upgradeInfo.requiredLevel);
+                        }
+                    }
+                    
+                } while (kv.GotoNextKey(false));
+                
+                kv.GoBack(); // Back from subsections
+            }
+            else
+            {
+                LogError("[PRESTIGE] Prestige %d has 'upgrades' section but no entries!", iPrestige);
+            }
+            
+            kv.GoBack(); // Back from "upgrades"
+        }
+        else
+        {
+            LogError("[PRESTIGE] Prestige %d has no 'upgrades' section!", iPrestige);
+        }
+        
+        LogMessage("[PRESTIGE] Prestige %d loaded with %d upgrades", 
+            iPrestige, g_hPrestigeUpgrades[iPrestige].Length);
+        
+        kv.GoBack(); // Back to root to check next prestige level
+        
+    } while (kv.GotoNextKey(false));
+    
+    delete kv;
+    LogMessage("[PRESTIGE] Prestige configuration loaded successfully");
 }
 
 void InitMenu()
@@ -233,7 +480,14 @@ public void TopMenu_HandleUpgrades(TopMenu topmenu, TopMenuAction action, TopMen
 				return;
 			}
 			
+			// PRESTIGE CHECK: Only check if upgrade is available if player hasn't purchased it yet
 			int iLevel = GetClientPurchasedUpgradeLevel(param, upgrade.index);
+			if (iLevel <= 0 && !IsUpgradeAvailableForPlayer(param, upgrade.index))
+			{
+				buffer[0] = ITEMDRAW_IGNORE;
+				return;
+			}
+			
 			// The upgrade is teamlocked and the client is in the wrong team.
 			if(!IsClientInLockedTeam(param, upgrade))
 			{
@@ -310,7 +564,6 @@ public void TopMenu_HandleSell(TopMenu topmenu, TopMenuAction action, TopMenuObj
 				return;
 
 			// Don't show the upgrade if it is disabled and players are not allowed to sell disabled upgrades.
-			// TODO: Show if upgrade is disabled?
 			if(!upgrade.enabled && (!g_hCVAllowSellDisabled.BoolValue || GetClientPurchasedUpgradeLevel(param, upgrade.index) <= 0))
 				return;
 			
@@ -347,8 +600,17 @@ public void TopMenu_HandleSell(TopMenu topmenu, TopMenuAction action, TopMenuObj
 				buffer[0] = ITEMDRAW_IGNORE;
 				return;
 			}
-
+			
 			int iCurrentLevel = GetClientPurchasedUpgradeLevel(param, upgrade.index);
+			
+			// PRESTIGE CHECK: Always show purchased upgrades, regardless of prestige restrictions
+			// Only hide if never purchased AND not available for current prestige/level
+			if (iCurrentLevel <= 0 && !IsUpgradeAvailableForPlayer(param, upgrade.index))
+			{
+				buffer[0] = ITEMDRAW_IGNORE;
+				return;
+			}
+
 			// Don't show the upgrade if it is disabled and players are not allowed to sell disabled upgrades.
 			if(!upgrade.enabled && (!g_hCVAllowSellDisabled.BoolValue || iCurrentLevel <= 0))
 				return;
@@ -511,6 +773,13 @@ public void TopMenu_HandleUpgradeSettings(TopMenu topmenu, TopMenuAction action,
 			}
 			
 			int iCurrentLevel = GetClientPurchasedUpgradeLevel(param, upgrade.index);
+			
+			// PRESTIGE CHECK: Always show purchased upgrades
+			if (iCurrentLevel <= 0 && !IsUpgradeAvailableForPlayer(param, upgrade.index))
+			{
+				buffer[0] = ITEMDRAW_IGNORE;
+				return;
+			}
 			
 			// Allow clients to view upgrades they no longer have access to, but don't show them, if they never bought it.
 			if(!HasAccessToUpgrade(param, upgrade) && iCurrentLevel <= 0)
@@ -870,6 +1139,14 @@ public void TopMenu_HandleHelp(TopMenu topmenu, TopMenuAction action, TopMenuObj
 			
 			int iCurrentLevel = GetClientPurchasedUpgradeLevel(param, upgrade.index);
 			
+			// NEW: Only show upgrades that are available for current prestige/level
+			// OR upgrades that the player has already purchased
+			if (!IsUpgradeAvailableForPlayer(param, upgrade.index) && iCurrentLevel <= 0)
+			{
+				buffer[0] = ITEMDRAW_IGNORE;
+				return;
+			}
+			
 			// Allow clients to read help about upgrades they no longer have access to, but don't show them, if they never bought it.
 			if(!HasAccessToUpgrade(param, upgrade) && iCurrentLevel <= 0)
 			{
@@ -912,45 +1189,49 @@ public void TopMenu_HandleHelp(TopMenu topmenu, TopMenuAction action, TopMenuObj
 
 void DisplayOtherUpgradesMenu(int client, int targetClient)
 {
-	Menu hMenu = new Menu(Menu_HandleOtherUpgrades);
-	hMenu.ExitBackButton = true;
-	
-	hMenu.SetTitle("%N\n%T\n-----\n", targetClient, "Credits", client, GetClientCredits(targetClient));
-	
-	int iSize = GetUpgradeCount();
-	InternalUpgradeInfo upgrade;
-	int iCurrentLevel;
-	char sTranslatedName[MAX_UPGRADE_NAME_LENGTH], sLine[128], sIndex[8];
-	for(int i=0;i<iSize;i++)
-	{
-		iCurrentLevel = GetClientPurchasedUpgradeLevel(targetClient, i);
-		GetUpgradeByIndex(i, upgrade);
-		
-		// Don't show disabled items in the menu.
-		if(!IsValidUpgrade(upgrade) || !upgrade.enabled || !HasAccessToUpgrade(targetClient, upgrade) || !IsClientInLockedTeam(targetClient, upgrade))
-			continue;
-		
-		GetUpgradeTranslatedName(client, upgrade.index, sTranslatedName, sizeof(sTranslatedName));
-		
-		if(iCurrentLevel >= upgrade.maxLevel)
-		{
-			Format(sLine, sizeof(sLine), "%T", "RPG menu other players upgrades entry max level", client, sTranslatedName, iCurrentLevel);
-		}
-		// Optionally show the maxlevel of the upgrade
-		else if (g_hCVShowMaxLevelInMenu.BoolValue)
-		{
-			Format(sLine, sizeof(sLine), "%T", "RPG menu other players upgrades entry show max", client, sTranslatedName, iCurrentLevel, upgrade.maxLevel);
-		}
-		else
-		{
-			Format(sLine, sizeof(sLine), "%T", "RPG menu other players upgrades entry", client, sTranslatedName, iCurrentLevel);
-		}
+    Menu hMenu = new Menu(Menu_HandleOtherUpgrades);
+    hMenu.ExitBackButton = true;
+    
+    hMenu.SetTitle("%N\n%T\n-----\n", targetClient, "Credits", client, GetClientCredits(targetClient));
+    
+    int iSize = GetUpgradeCount();
+    InternalUpgradeInfo upgrade;
+    int iCurrentLevel;
+    char sTranslatedName[MAX_UPGRADE_NAME_LENGTH], sLine[128], sIndex[8];
+    for(int i=0;i<iSize;i++)
+    {
+        iCurrentLevel = GetClientPurchasedUpgradeLevel(targetClient, i);
+        GetUpgradeByIndex(i, upgrade);
+        
+        // Don't show disabled items in the menu.
+        if(!IsValidUpgrade(upgrade) || !upgrade.enabled || !HasAccessToUpgrade(targetClient, upgrade) || !IsClientInLockedTeam(targetClient, upgrade))
+            continue;
+        
+        // NEW: Check if upgrade is available for target's prestige/level
+        if (!IsUpgradeAvailableForPlayer(targetClient, i) && iCurrentLevel <= 0)
+            continue;
+        
+        GetUpgradeTranslatedName(client, upgrade.index, sTranslatedName, sizeof(sTranslatedName));
+        
+        if(iCurrentLevel >= upgrade.maxLevel)
+        {
+            Format(sLine, sizeof(sLine), "%T", "RPG menu other players upgrades entry max level", client, sTranslatedName, iCurrentLevel);
+        }
+        // Optionally show the maxlevel of the upgrade
+        else if (g_hCVShowMaxLevelInMenu.BoolValue)
+        {
+            Format(sLine, sizeof(sLine), "%T", "RPG menu other players upgrades entry show max", client, sTranslatedName, iCurrentLevel, upgrade.maxLevel);
+        }
+        else
+        {
+            Format(sLine, sizeof(sLine), "%T", "RPG menu other players upgrades entry", client, sTranslatedName, iCurrentLevel);
+        }
 
-		IntToString(i, sIndex, sizeof(sIndex));
-		hMenu.AddItem(sIndex, sLine, ITEMDRAW_DISABLED);
-	}
-	
-	hMenu.Display(client, MENU_TIME_FOREVER);
+        IntToString(i, sIndex, sizeof(sIndex));
+        hMenu.AddItem(sIndex, sLine, ITEMDRAW_DISABLED);
+    }
+    
+    hMenu.Display(client, MENU_TIME_FOREVER);
 }
 
 public int Menu_HandleOtherUpgrades(Menu menu, MenuAction action, int param1, int param2)
@@ -1027,4 +1308,67 @@ int GetItemDrawFlagsForTeamlock(int iLevel, bool bBuyMenu)
 		}
 	}
 	return 0;
+}
+
+bool IsUpgradeAvailableForPlayer(int client, int upgradeIndex)
+{
+    int iTotalUpgrades = GetUpgradeCount();
+    if (upgradeIndex < 0 || upgradeIndex >= iTotalUpgrades)
+    {
+        return false;
+    }
+    
+    InternalUpgradeInfo upgrade;
+    if (!GetUpgradeByIndex(upgradeIndex, upgrade) || !IsValidUpgrade(upgrade))
+    {
+        return false;
+    }
+    int iPurchasedLevel = GetClientPurchasedUpgradeLevel(client, upgradeIndex);
+    if (iPurchasedLevel > 0)
+    {
+        return true;
+    }
+    int iPrestige = SMRPG_GetClientPrestigeLevel(client);
+    int iLevel = SMRPG_GetClientLevel(client);
+    if (iPrestige < 0 || iPrestige >= MAXPRESTIGE)
+    {
+        return false;
+    }
+    
+    if (g_hPrestigeUpgrades[iPrestige] == null)
+    {
+        LoadPrestigeUpgrades();
+        
+        if (g_hPrestigeUpgrades[iPrestige] == null)
+        {
+            return true;
+        }
+    }
+    
+    int iSize = g_hPrestigeUpgrades[iPrestige].Length;
+    if (iSize == 0)
+    {
+        return true;
+    }
+    PrestigeUpgradeInfo upgradeInfo;
+    bool foundInCurrentPrestige = false;
+    
+    for (int i = 0; i < iSize; i++)
+    {
+        g_hPrestigeUpgrades[iPrestige].GetArray(i, upgradeInfo);
+        
+        if (StrEqual(upgradeInfo.shortName, upgrade.shortName, false))
+        {
+            foundInCurrentPrestige = true;
+            if (iLevel >= upgradeInfo.requiredLevel)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+    }
+    return false;
 }

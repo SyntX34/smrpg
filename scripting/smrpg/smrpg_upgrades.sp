@@ -1,7 +1,7 @@
 #pragma semicolon 1
 #include <sourcemod>
 #include <smlib>
-#include <autoexecconfig> // https://github.com/Impact123/AutoExecConfig
+// #include <autoexecconfig> 
 
 enum struct InternalUpgradeInfo
 {
@@ -187,16 +187,17 @@ public int Native_RegisterUpgradeType(Handle plugin, int numParams)
 	if(!DirExists("cfg/sourcemod/smrpg"))
 		CreateDirectory("cfg/sourcemod/smrpg", FPERM_U_READ|FPERM_U_WRITE|FPERM_U_EXEC|FPERM_G_READ|FPERM_G_WRITE|FPERM_G_EXEC|FPERM_O_READ|FPERM_O_EXEC);
 	
-	Format(sCvarName, sizeof(sCvarName), "smrpg_upgrade_%s", sShortName);
-	AutoExecConfig_SetFile(sCvarName, "sourcemod/smrpg");
-	AutoExecConfig_SetCreateFile(true);
-	AutoExecConfig_SetPlugin(plugin);
+	// DON'T use AutoExecConfig for upgrade convars - it causes heap fragmentation
+	// Format(sCvarName, sizeof(sCvarName), "smrpg_upgrade_%s", sShortName);
+	// AutoExecConfig_SetFile(sCvarName, "sourcemod/smrpg");
+	// AutoExecConfig_SetCreateFile(true);
+	// AutoExecConfig_SetPlugin(plugin);
 	
-	// Register convars
+	// Register convars using regular CreateConVar instead of AutoExecConfig_CreateConVar
 	Format(sCvarName, sizeof(sCvarName), "smrpg_%s_enable", sShortName);
 	Format(sCvarDescription, sizeof(sCvarDescription), "Enables (1) or disables (0) the %s upgrade.", sName);
 	IntToString(view_as<int>(bDefaultEnable), sValue, sizeof(sValue));
-	ConVar hCvar = AutoExecConfig_CreateConVar(sCvarName, sValue, sCvarDescription, 0, true, 0.0, true, 1.0);
+	ConVar hCvar = CreateConVar(sCvarName, sValue, sCvarDescription, 0, true, 0.0, true, 1.0);
 	hCvar.AddChangeHook(ConVar_UpgradeChanged);
 	upgrade.enableConvar = hCvar;
 	upgrade.enabled = hCvar.BoolValue;
@@ -205,14 +206,14 @@ public int Native_RegisterUpgradeType(Handle plugin, int numParams)
 	Format(sCvarName, sizeof(sCvarName), "smrpg_%s_maxlevel", sShortName);
 	Format(sCvarDescription, sizeof(sCvarDescription), "%s upgrade maximum level. This is the maximum level players can reach for this upgrade.\nWhen changed, all players who bought a higher level before are refunded with the full upgrade costs and set down to the new maxlevel.", sName);
 	IntToString(iDefaultMaxLevel, sValue, sizeof(sValue));
-	hCvar = AutoExecConfig_CreateConVar(sCvarName, sValue, sCvarDescription, 0, true, 1.0);
+	hCvar = CreateConVar(sCvarName, sValue, sCvarDescription, 0, true, 1.0);
 	hCvar.AddChangeHook(ConVar_UpgradeMaxLevelChanged);
 	upgrade.maxLevelConvar = hCvar;
 	upgrade.maxLevel = hCvar.IntValue;
 	
 	Format(sCvarName, sizeof(sCvarName), "smrpg_%s_startlevel", sShortName);
 	Format(sCvarDescription, sizeof(sCvarDescription), "%s upgrade start level. The initial levels players get of this upgrade when they first join the server.", sName);
-	hCvar = AutoExecConfig_CreateConVar(sCvarName, "0", sCvarDescription, 0, true, 0.0);
+	hCvar = CreateConVar(sCvarName, "0", sCvarDescription, 0, true, 0.0);
 	hCvar.AddChangeHook(ConVar_UpgradeChanged);
 	upgrade.startLevelConvar = hCvar;
 	upgrade.startLevel = hCvar.IntValue;
@@ -226,7 +227,7 @@ public int Native_RegisterUpgradeType(Handle plugin, int numParams)
 	Format(sCvarName, sizeof(sCvarName), "smrpg_%s_cost", sShortName);
 	Format(sCvarDescription, sizeof(sCvarDescription), "%s upgrade start cost. The initial amount of credits the first level of this upgrade costs.", sName);
 	IntToString(iDefaultStartCost, sValue, sizeof(sValue));
-	hCvar = AutoExecConfig_CreateConVar(sCvarName, sValue, sCvarDescription, 0, true, 0.0);
+	hCvar = CreateConVar(sCvarName, sValue, sCvarDescription, 0, true, 0.0);
 	hCvar.AddChangeHook(ConVar_UpgradeChanged);
 	upgrade.startCostConvar = hCvar;
 	upgrade.startCost = hCvar.IntValue;
@@ -234,7 +235,7 @@ public int Native_RegisterUpgradeType(Handle plugin, int numParams)
 	Format(sCvarName, sizeof(sCvarName), "smrpg_%s_icost", sShortName);
 	Format(sCvarDescription, sizeof(sCvarDescription), "%s upgrade cost increment for each level. The amount of credits added to the costs for each level: Buy upgrade level x -> startcost + x * incrementcost.", sName);
 	IntToString(iDefaultCostInc, sValue, sizeof(sValue));
-	hCvar = AutoExecConfig_CreateConVar(sCvarName, sValue, sCvarDescription, 0, true, 0.0);
+	hCvar = CreateConVar(sCvarName, sValue, sCvarDescription, 0, true, 0.0);
 	hCvar.AddChangeHook(ConVar_UpgradeChanged);
 	upgrade.incCostConvar = hCvar;
 	upgrade.incCost = hCvar.IntValue;
@@ -242,7 +243,7 @@ public int Native_RegisterUpgradeType(Handle plugin, int numParams)
 	Format(sCvarName, sizeof(sCvarName), "smrpg_%s_adminflag", sShortName);
 	Format(sCvarDescription, sizeof(sCvarDescription), "Required admin flag to use this upgrade. Leave blank to allow everyone to use this upgrade. This also checks for a \"smrpg_upgrade_%s\" admin override for permissions.", sShortName);
 	GetAdminFlagStringFromBits(iDefaultAdminFlags, sValue, sizeof(sValue));
-	hCvar = AutoExecConfig_CreateConVar(sCvarName, sValue, sCvarDescription, 0, true, 0.0);
+	hCvar = CreateConVar(sCvarName, sValue, sCvarDescription);
 	hCvar.AddChangeHook(ConVar_UpgradeChanged);
 	upgrade.adminFlagConvar = hCvar;
 	hCvar.GetString(sValue, sizeof(sValue));
@@ -250,21 +251,21 @@ public int Native_RegisterUpgradeType(Handle plugin, int numParams)
 	
 	Format(sCvarName, sizeof(sCvarName), "smrpg_%s_allowbots", sShortName);
 	Format(sCvarDescription, sizeof(sCvarDescription), "Allow bots to use the %s upgrade?", sName);
-	hCvar = AutoExecConfig_CreateConVar(sCvarName, "1", sCvarDescription, 0, true, 0.0, true, 1.0);
+	hCvar = CreateConVar(sCvarName, "1", sCvarDescription, 0, true, 0.0, true, 1.0);
 	hCvar.AddChangeHook(ConVar_UpgradeChanged);
 	upgrade.botsConvar = hCvar;
 	upgrade.allowBots = hCvar.BoolValue;
 	
 	Format(sCvarName, sizeof(sCvarName), "smrpg_%s_teamlock", sShortName);
 	Format(sCvarDescription, sizeof(sCvarDescription), "Restrict access to the %s upgrade to a team?\nOptions:\n\t0: Disable restriction and allow the upgrade to be used by players in any team.\n\t2: Only allow players of the RED/Terrorist team to use this upgrade.\n\t3: Only allow players of the BLU/Counter-Terrorist team to use this upgrade.", sName);
-	hCvar = AutoExecConfig_CreateConVar(sCvarName, "0", sCvarDescription, 0, true, 0.0, true, 3.0);
+	hCvar = CreateConVar(sCvarName, "0", sCvarDescription, 0, true, 0.0, true, 3.0);
 	hCvar.AddChangeHook(ConVar_UpgradeChanged);
 	upgrade.teamlockConvar = hCvar;
 	upgrade.teamlock = hCvar.IntValue;
 	
-	AutoExecConfig_ExecuteFile();
-	
-	//AutoExecConfig_CleanFile();
+	// DON'T call AutoExecConfig_ExecuteFile() - we're not using AutoExecConfig for upgrades
+	// AutoExecConfig_ExecuteFile();
+	// AutoExecConfig_CleanFile();
 	
 	// We already got info about this. Don't insert it a second time.
 	if(bAlreadyLoaded)
@@ -374,19 +375,20 @@ public int Native_CreateUpgradeConVar(Handle plugin, int numParams)
 	bool hasMax = view_as<bool>(GetNativeCell(8));
 	float max = view_as<float>(GetNativeCell(9));
 	
-	char sFileName[PLATFORM_MAX_PATH];
-	Format(sFileName, sizeof(sFileName), "smrpg_upgrade_%s", sShortName);
-	AutoExecConfig_SetFile(sFileName, "sourcemod/smrpg");
-	AutoExecConfig_SetCreateFile(true);
-	AutoExecConfig_SetPlugin(plugin);
+	// Don't use AutoExecConfig for upgrade convars
+	// char sFileName[PLATFORM_MAX_PATH];
+	// Format(sFileName, sizeof(sFileName), "smrpg_upgrade_%s", sShortName);
+	// AutoExecConfig_SetFile(sFileName, "sourcemod/smrpg");
+	// AutoExecConfig_SetCreateFile(true);
+	// AutoExecConfig_SetPlugin(plugin);
 	
-	ConVar hCvar = AutoExecConfig_CreateConVar(name, defaultValue, description, flags, hasMin, min, hasMax, max);
+	// Use regular CreateConVar instead
+	ConVar hCvar = CreateConVar(name, defaultValue, description, flags, hasMin, min, hasMax, max);
 	
 	// AutoExecConfig_ExecuteFile(); // No need to call AutoExecConfig again. The file is already in the list.
 	// Just execute the config again, to get the values?
-	ServerCommand("exec sourcemod/smrpg/smrpg_upgrade_%s.cfg", sShortName);
-	
-	//AutoExecConfig_CleanFile();
+	// ServerCommand("exec sourcemod/smrpg/smrpg_upgrade_%s.cfg", sShortName);
+	// AutoExecConfig_CleanFile();
 	
 	return view_as<int>(hCvar);
 }
@@ -415,8 +417,70 @@ public int Native_GetUpgradeInfo(Handle plugin, int numParams)
 	GetNativeString(1, sShortName, len+1);
 	
 	InternalUpgradeInfo upgrade;
-	if(!GetUpgradeByShortname(sShortName, upgrade) || !IsValidUpgrade(upgrade))
-		return ThrowNativeError(SP_ERROR_NATIVE, "No upgrade named \"%s\" loaded.", sShortName);
+	if(!GetUpgradeByShortname(sShortName, upgrade))
+	{
+		// Log a warning but don't crash during startup
+		static bool bStartupWarningPrinted = false;
+		if(!bStartupWarningPrinted)
+		{
+			LogMessage("Upgrade '%s' not found during startup (plugin might still be loading).", sShortName);
+			bStartupWarningPrinted = true;
+		}
+		
+		// Return default/empty UpgradeInfo
+		int arraysize = GetNativeCell(3);
+		if(arraysize > sizeof(UpgradeInfo))
+			arraysize = sizeof(UpgradeInfo);
+		
+		UpgradeInfo publicUpgrade;
+		publicUpgrade.enabled = false;
+		publicUpgrade.maxLevelBarrier = 0;
+		publicUpgrade.maxLevel = 0;
+		publicUpgrade.startCost = 0;
+		publicUpgrade.incCost = 0;
+		publicUpgrade.adminFlag = 0;
+		publicUpgrade.teamlock = 0;
+		publicUpgrade.startLevel = 0;
+		publicUpgrade.name[0] = '\0';
+		publicUpgrade.shortName[0] = '\0';
+		publicUpgrade.description[0] = '\0';
+		
+		SetNativeArray(2, publicUpgrade, arraysize);
+		return 0;
+	}
+	
+	// Check if upgrade is valid (plugin might be unloaded)
+	if(!IsValidUpgrade(upgrade))
+	{
+		// Log a warning but don't crash during startup
+		static bool bUnavailableWarningPrinted = false;
+		if(!bUnavailableWarningPrinted)
+		{
+			LogMessage("Upgrade '%s' is unavailable (plugin might be unloaded).", sShortName);
+			bUnavailableWarningPrinted = true;
+		}
+		
+		// Return default/empty UpgradeInfo
+		int arraysize = GetNativeCell(3);
+		if(arraysize > sizeof(UpgradeInfo))
+			arraysize = sizeof(UpgradeInfo);
+		
+		UpgradeInfo publicUpgrade;
+		publicUpgrade.enabled = false;
+		publicUpgrade.maxLevelBarrier = 0;
+		publicUpgrade.maxLevel = 0;
+		publicUpgrade.startCost = 0;
+		publicUpgrade.incCost = 0;
+		publicUpgrade.adminFlag = 0;
+		publicUpgrade.teamlock = 0;
+		publicUpgrade.startLevel = 0;
+		publicUpgrade.name[0] = '\0';
+		publicUpgrade.shortName[0] = '\0';
+		publicUpgrade.description[0] = '\0';
+		
+		SetNativeArray(2, publicUpgrade, arraysize);
+		return 0;
+	}
 	
 	// Keep this future proof. If the calling plugin wants more information than we got, only return as much as we know.
 	// If it wants less info, only write less.
@@ -544,10 +608,11 @@ public int Native_SetUpgradeDefaultCosmeticEffect(Handle plugin, int numParams)
 	
 	char sCvarName[64], sCvarDescription[256];
 	
-	Format(sCvarName, sizeof(sCvarName), "smrpg_upgrade_%s", sShortName);
-	AutoExecConfig_SetFile(sCvarName, "sourcemod/smrpg");
-	AutoExecConfig_SetCreateFile(true);
-	AutoExecConfig_SetPlugin(plugin);
+	// Don't use AutoExecConfig for upgrade convars
+	// Format(sCvarName, sizeof(sCvarName), "smrpg_upgrade_%s", sShortName);
+	// AutoExecConfig_SetFile(sCvarName, "sourcemod/smrpg");
+	// AutoExecConfig_SetCreateFile(true);
+	// AutoExecConfig_SetPlugin(plugin);
 	
 	switch(iFX)
 	{
@@ -555,7 +620,7 @@ public int Native_SetUpgradeDefaultCosmeticEffect(Handle plugin, int numParams)
 		{
 			Format(sCvarName, sizeof(sCvarName), "smrpg_%s_visuals", sShortName);
 			Format(sCvarDescription, sizeof(sCvarDescription), "Show the visual effects of upgrade %s by default?", upgrade.name);
-			ConVar hCvar = AutoExecConfig_CreateConVar(sCvarName, (bDefaultEnable?"1":"0"), sCvarDescription, 0, true, 0.0, true, 1.0);
+			ConVar hCvar = CreateConVar(sCvarName, (bDefaultEnable?"1":"0"), sCvarDescription, 0, true, 0.0, true, 1.0);
 			hCvar.AddChangeHook(ConVar_UpgradeChanged);
 			upgrade.visualsConvar = hCvar;
 			upgrade.enableVisuals = hCvar.BoolValue;
@@ -564,7 +629,7 @@ public int Native_SetUpgradeDefaultCosmeticEffect(Handle plugin, int numParams)
 		{
 			Format(sCvarName, sizeof(sCvarName), "smrpg_%s_sounds", sShortName);
 			Format(sCvarDescription, sizeof(sCvarDescription), "Play the sounds of upgrade %s by default?", upgrade.name);
-			ConVar hCvar = AutoExecConfig_CreateConVar(sCvarName, (bDefaultEnable?"1":"0"), sCvarDescription, 0, true, 0.0, true, 1.0);
+			ConVar hCvar = CreateConVar(sCvarName, (bDefaultEnable?"1":"0"), sCvarDescription, 0, true, 0.0, true, 1.0);
 			hCvar.AddChangeHook(ConVar_UpgradeChanged);
 			upgrade.soundsConvar = hCvar;
 			upgrade.enableSounds = hCvar.BoolValue;
@@ -716,9 +781,21 @@ int GetUpgradeCount()
 	return g_hUpgrades.Length;
 }
 
-void GetUpgradeByIndex(int iIndex, InternalUpgradeInfo upgrade)
+bool GetUpgradeByIndex(int iIndex, InternalUpgradeInfo upgrade)
 {
-	GetArrayArray(g_hUpgrades, iIndex, upgrade, sizeof(InternalUpgradeInfo));
+    if (iIndex < 0 || iIndex >= g_hUpgrades.Length)
+    {
+        upgrade.index = -1;
+        upgrade.databaseId = -1;
+        upgrade.enabled = false;
+        upgrade.unavailable = true;
+        upgrade.shortName[0] = '\0';
+        upgrade.name[0] = '\0';
+        return false;
+    }
+    
+    g_hUpgrades.GetArray(iIndex, upgrade, sizeof(InternalUpgradeInfo));
+    return true;
 }
 
 bool GetUpgradeByShortname(const char[] sShortName, InternalUpgradeInfo upgrade)

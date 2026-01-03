@@ -1,6 +1,7 @@
 #pragma semicolon 1
 #include <sourcemod>
 #include <smrpg>
+#include <keyvalues>
 
 #undef REQUIRE_PLUGIN
 #include <ccc>
@@ -28,6 +29,8 @@ enum ChatSystemMode
 ConVar g_hCVMaxChatRank;
 ConVar g_hCVShowLevel;
 ConVar g_hCVChatMode;
+ConVar g_hCVPrestigeTagEnabled;
+ConVar g_hCVPrestigeTagStyle;
 
 bool g_bCCCAvailable = false;
 ChatSystemMode g_iCurrentMode = Mode_Auto;
@@ -47,11 +50,29 @@ char g_sColorPalette[][] = {
 	"FF66AA", "66FFAA", "AA66FF", "FFAA66", "66FF66", "AAFF66", "FF66FF", "66FFFF", "FFFF66", "66AAFF"
 };
 
+// Prestige configuration
+#define MAX_PRESTIGE 8
+#define CONFIG_PATH "configs/smrpg/prestige.cfg"
+KeyValues g_kvPrestigeConfig;
+
+// Special colors for prestige levels
+char g_sPrestigeColors[][] = {
+	"FFFFFF",  // Prestige 0: White
+	"4CAF50",  // Prestige 1: Green
+	"2196F3",  // Prestige 2: Blue
+	"FF9800",  // Prestige 3: Orange
+	"9C27B0",  // Prestige 4: Purple
+	"F44336",  // Prestige 5: Red
+	"00BCD4",  // Prestige 6: Cyan
+	"FFEB3B",  // Prestige 7: Yellow
+	"FF4081"   // Prestige 8: Pink
+};
+
 public Plugin myinfo =
 {
 	name = "SM:RPG > Chat Tags " ... PROCESSOR_TYPE,
 	author = "Peace-Maker, +SyntX",
-	description = "Add RPG level in front of chat messages with CCC integration.",
+	description = "Add RPG level and prestige in front of chat messages with CCC integration.",
 	version = SMRPG_VERSION,
 	url = "https://www.wcfan.de/"
 };
@@ -63,11 +84,34 @@ public void OnPluginStart()
 	g_hCVMaxChatRank = CreateConVar("smrpg_chattags_maxrank", "10", "Show the rank of the player up until this value in front of his name in chat. -1 to disable, 0 to show for everyone.", _, true, -1.0);
 	g_hCVShowLevel = CreateConVar("smrpg_chattags_showlevel", "1", "Show the level of the player in front of his name in chat?", _, true, 0.0, true, 1.0);
 	g_hCVChatMode = CreateConVar("smrpg_chattags_mode", "0", "Chat system mode: 0 = Auto-detect, 1 = Force CCC integration, 2 = Force standalone mode", _, true, 0.0, true, 2.0);
+	g_hCVPrestigeTagEnabled = CreateConVar("smrpg_chattags_prestige_enabled", "1", "Show prestige level in chat? 1 = Enabled, 0 = Disabled", _, true, 0.0, true, 1.0);
+	g_hCVPrestigeTagStyle = CreateConVar("smrpg_chattags_prestige_style", "1", "Prestige tag style: 1 = Prestige name from config, 2 = Roman numerals, 3 = Numbers", _, true, 1.0, true, 3.0);
+	
 	g_hCVChatMode.AddChangeHook(OnModeChanged);
 	HookEvent("player_say", Event_PlayerSay, EventHookMode_Pre);
 	
+	// Load prestige configuration
+	LoadPrestigeConfig();
+	
 	AutoExecConfig(true, "smrpg_chattags");
 	UpdateChatMode();
+}
+
+void LoadPrestigeConfig()
+{
+	char configPath[PLATFORM_MAX_PATH];
+	BuildPath(Path_SM, configPath, sizeof(configPath), CONFIG_PATH);
+	
+	g_kvPrestigeConfig = new KeyValues("Prestige");
+	
+	if(!g_kvPrestigeConfig.ImportFromFile(configPath))
+	{
+		LogError("Could not load prestige configuration from %s", configPath);
+		LogMessage("Please create a configuration file at %s", configPath);
+		return;
+	}
+	
+	LogMessage("Loaded prestige configuration from %s", configPath);
 }
 
 public void OnAllPluginsLoaded()
@@ -139,6 +183,7 @@ void StoreOriginalCCCTag(int client)
 	strcopy(g_sOriginalCCCTag[client], sizeof(g_sOriginalCCCTag[]), tempTag);
 	g_bHasOriginalTag[client] = true;
 }
+
 public Action Event_PlayerSay(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = GetClientOfUserId(event.GetInt("userid"));
@@ -186,6 +231,14 @@ void RemoveSMRPGTags(char[] text, int maxlen)
 				isRPGTag = true;
 			}
 			else if (i + 5 < len && StrContains(text[i], "[LVL ", false) == 0)
+			{
+				isRPGTag = true;
+			}
+			else if (i + 6 < len && StrContains(text[i], "[Prestige ", false) == 0)
+			{
+				isRPGTag = true;
+			}
+			else if (i + 5 < len && StrContains(text[i], "[PRST ", false) == 0)
 			{
 				isRPGTag = true;
 			}
@@ -268,10 +321,43 @@ void GetRandomColor(char[] buffer, int maxlen)
 	strcopy(buffer, maxlen, g_sColorPalette[randomIndex]);
 }
 
+// Get prestige color based on prestige level
+void GetPrestigeColor(int prestigeLevel, char[] buffer, int maxlen)
+{
+	if (prestigeLevel >= 0 && prestigeLevel < sizeof(g_sPrestigeColors))
+	{
+		strcopy(buffer, maxlen, g_sPrestigeColors[prestigeLevel]);
+	}
+	else
+	{
+		GetRandomColor(buffer, maxlen);
+	}
+}
+
+// Get prestige name from config
+void GetPrestigeName(int prestigeLevel, char[] buffer, int maxlen)
+{
+	buffer[0] = '\0';
+	
+	if (prestigeLevel < 0 || prestigeLevel > MAX_PRESTIGE)
+		return;
+	
+	char prestigeKey[4];
+	IntToString(prestigeLevel, prestigeKey, sizeof(prestigeKey));
+	
+	g_kvPrestigeConfig.Rewind();
+	if (g_kvPrestigeConfig.JumpToKey(prestigeKey))
+	{
+		g_kvPrestigeConfig.GetString("name", buffer, maxlen, "Unknown");
+		g_kvPrestigeConfig.GoBack();
+	}
+}
+
 void UpdateClientTagWithRandomColors(int client)
 {
 	if (!IsClientInGame(client) || IsFakeClient(client))
 		return;
+	
 	bool alpha;
 	int cccTagColorInt = CCC_GetColor(client, CCC_TagColor, alpha);
 	char cccTagColorHex[8] = "";
@@ -279,6 +365,7 @@ void UpdateClientTagWithRandomColors(int client)
 	{
 		Format(cccTagColorHex, sizeof(cccTagColorHex), "%06X", cccTagColorInt);
 	}
+	
 	char sRankTag[128], sRankTagClean[64], rankColor[8];
 	sRankTag[0] = '\0';
 	rankColor[0] = '\0';
@@ -296,6 +383,59 @@ void UpdateClientTagWithRandomColors(int client)
 			Format(sRankTag, sizeof(sRankTag), "\x07%s%s\x01", rankColor, sRankTagClean);
 		}
 	}
+	
+	// Get prestige level
+	char sPrestigeTag[128], sPrestigeTagClean[64], prestigeColor[8];
+	sPrestigeTag[0] = '\0';
+	prestigeColor[0] = '\0';
+	
+	if (g_hCVPrestigeTagEnabled.BoolValue)
+	{
+		int prestigeLevel = SMRPG_GetClientPrestigeLevel(client);
+		if (prestigeLevel > 0)
+		{
+			// Create prestige tag based on style preference
+			int iStyle = g_hCVPrestigeTagStyle.IntValue;
+			
+			switch (iStyle)
+			{
+				case 1: // Prestige name from config
+				{
+					char prestigeName[32];
+					GetPrestigeName(prestigeLevel, prestigeName, sizeof(prestigeName));
+					Format(sPrestigeTagClean, sizeof(sPrestigeTagClean), "[%s]", prestigeName);
+				}
+				case 2: // Roman numerals
+				{
+					// Roman numerals array
+					char romanNumerals[][] = {"I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"};
+					if (prestigeLevel < sizeof(romanNumerals))
+					{
+						Format(sPrestigeTagClean, sizeof(sPrestigeTagClean), "[Prestige %s]", romanNumerals[prestigeLevel]);
+					}
+					else
+					{
+						Format(sPrestigeTagClean, sizeof(sPrestigeTagClean), "[Prestige %d]", prestigeLevel);
+					}
+				}
+				case 3: // Numbers
+				{
+					Format(sPrestigeTagClean, sizeof(sPrestigeTagClean), "[Prestige %d]", prestigeLevel);
+				}
+				default: // Default to prestige name
+				{
+					char prestigeName[32];
+					GetPrestigeName(prestigeLevel, prestigeName, sizeof(prestigeName));
+					Format(sPrestigeTagClean, sizeof(sPrestigeTagClean), "[%s]", prestigeName);
+				}
+			}
+			
+			// Get prestige-specific color
+			GetPrestigeColor(prestigeLevel, prestigeColor, sizeof(prestigeColor));
+			Format(sPrestigeTag, sizeof(sPrestigeTag), "\x07%s%s\x01", prestigeColor, sPrestigeTagClean);
+		}
+	}
+	
 	char sLevelTag[128], sLevelTagClean[64]; 
 	sLevelTag[0] = '\0';
 	if (g_hCVShowLevel.BoolValue)
@@ -306,8 +446,10 @@ void UpdateClientTagWithRandomColors(int client)
 		
 		char levelColor[8];
 		GetRandomColor(levelColor, sizeof(levelColor));
+		
+		// Try to get a color different from prestige and rank colors
 		int attempts = 0;
-		while (StrEqual(levelColor, rankColor) && attempts < 10)
+		while ((StrEqual(levelColor, rankColor) || StrEqual(levelColor, prestigeColor)) && attempts < 10)
 		{
 			GetRandomColor(levelColor, sizeof(levelColor));
 			attempts++;
@@ -315,18 +457,20 @@ void UpdateClientTagWithRandomColors(int client)
 		
 		Format(sLevelTag, sizeof(sLevelTag), "\x07%s%s\x01", levelColor, sLevelTagClean);
 	}
+	
 	char sNewTag[256];
 	
 	if (strlen(cccTagColorHex) > 0)
 	{
-		Format(sNewTag, sizeof(sNewTag), "%s%s\x01\x07%s%s", 
-			sRankTag, sLevelTag, cccTagColorHex, g_sOriginalCCCTag[client]);
+		Format(sNewTag, sizeof(sNewTag), "%s%s%s\x01\x07%s%s", 
+			sPrestigeTag, sRankTag, sLevelTag, cccTagColorHex, g_sOriginalCCCTag[client]);
 	}
 	else
 	{
-		Format(sNewTag, sizeof(sNewTag), "%s%s%s", 
-			sRankTag, sLevelTag, g_sOriginalCCCTag[client]);
+		Format(sNewTag, sizeof(sNewTag), "%s%s%s%s", 
+			sPrestigeTag, sRankTag, sLevelTag, g_sOriginalCCCTag[client]);
 	}
+	
 	CCC_SetTag(client, sNewTag);
 	CCC_ResetColor(client, CCC_NameColor);
 	CCC_ResetColor(client, CCC_ChatColor);
@@ -368,6 +512,7 @@ void UpdateChatMode()
 			g_iCurrentMode = g_bCCCAvailable ? Mode_CCC : Mode_Standalone;
 		}
 	}
+	
 	if (g_iCurrentMode == Mode_CCC)
 	{
 		for (int i = 1; i <= MaxClients; i++)
@@ -430,7 +575,59 @@ public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstr
 				Format(sRankTag, sizeof(sRankTag), "\x07%s%s\x01", rankColor, sRankTagClean);
 			}
 		}
-
+		
+		// Add prestige tag in standalone mode
+		char sPrestigeTag[128];
+		char sPrestigeTagClean[64];
+		sPrestigeTag[0] = '\0';
+		
+		if (g_hCVPrestigeTagEnabled.BoolValue)
+		{
+			int prestigeLevel = SMRPG_GetClientPrestigeLevel(author);
+			if (prestigeLevel > 0)
+			{
+				// Create prestige tag based on style preference
+				int iStyle = g_hCVPrestigeTagStyle.IntValue;
+				
+				switch (iStyle)
+				{
+					case 1: // Prestige name from config
+					{
+						char prestigeName[32];
+						GetPrestigeName(prestigeLevel, prestigeName, sizeof(prestigeName));
+						Format(sPrestigeTagClean, sizeof(sPrestigeTagClean), "[%s]", prestigeName);
+					}
+					case 2: // Roman numerals
+					{
+						// Roman numerals array
+						char romanNumerals[][] = {"I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"};
+						if (prestigeLevel < sizeof(romanNumerals))
+						{
+							Format(sPrestigeTagClean, sizeof(sPrestigeTagClean), "[Prestige %s]", romanNumerals[prestigeLevel]);
+						}
+						else
+						{
+							Format(sPrestigeTagClean, sizeof(sPrestigeTagClean), "[Prestige %d]", prestigeLevel);
+						}
+					}
+					case 3: // Numbers
+					{
+						Format(sPrestigeTagClean, sizeof(sPrestigeTagClean), "[Prestige %d]", prestigeLevel);
+					}
+					default: // Default to prestige name
+					{
+						char prestigeName[32];
+						GetPrestigeName(prestigeLevel, prestigeName, sizeof(prestigeName));
+						Format(sPrestigeTagClean, sizeof(sPrestigeTagClean), "[%s]", prestigeName);
+					}
+				}
+				
+				char prestigeColor[8];
+				GetPrestigeColor(prestigeLevel, prestigeColor, sizeof(prestigeColor));
+				Format(sPrestigeTag, sizeof(sPrestigeTag), "\x07%s%s\x01", prestigeColor, sPrestigeTagClean);
+			}
+		}
+		
 		char sLevelTag[128];
 		char sLevelTagClean[64];
 		sLevelTag[0] = '\0';
@@ -445,7 +642,8 @@ public Action CP_OnChatMessage(int& author, ArrayList recipients, char[] flagstr
 			GetRandomColor(levelColor, sizeof(levelColor));
 			Format(sLevelTag, sizeof(sLevelTag), "\x07%s%s\x01", levelColor, sLevelTagClean);
 		}
-		Format(name, MAXLENGTH_NAME, "%s%s\x03%s", sRankTag, sLevelTag, name);
+		
+		Format(name, MAXLENGTH_NAME, "%s%s%s\x03%s", sPrestigeTag, sRankTag, sLevelTag, name);
 		
 #if defined USE_SIMPLE_PROCESSOR
 		CProcessVariables(name, MAXLENGTH_NAME, false);

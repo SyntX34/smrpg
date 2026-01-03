@@ -171,4 +171,43 @@
 	{
 		"fi"			"Varoitus: Sinä menetät kaikki Xp:si ja statsisi\nResetoi statsisi täydellisesti?"
 	}
+	"Confirm reset prestige"
+	{
+		"fi"	"Haluatko varmasti nollata pelaajan %N prestiisin?"
+	}
+
+	"Confirm set prestige"
+	{
+		"fi"	"Haluatko varmasti asettaa pelaajan %N prestiisin arvoon %d?"
+	}
+
+	"Manage Prestige"
+	{
+		"fi"	"Hallinnoi prestiisiä"
+	}
+
+	"Reset Prestige to 0"
+	{
+		"fi"	"Nollaa prestiisi arvoon 0"
+	}
+
+	"Current Prestige"
+	{
+		"fi"	"Nykyinen prestiisi"
+	}
+
+	"Prestige"
+	{
+		"fi"	"Prestiisi"
+	}
+
+	"Inform player prestige reset"
+	{
+		"fi"	"Olet nollannut pelaajan %N prestiisin"
+	}
+
+	"Inform player prestige set"
+	{
+		"fi"	"Olet asettanut pelaajan %N prestiisin arvoon %d"
+	}
 }

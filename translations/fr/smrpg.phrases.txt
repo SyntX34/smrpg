@@ -440,4 +440,43 @@
 		// 1: Value of smrpg_lastexperience_count. The amount of experience saved in the array.
 		"fr"	"Tape {N}rpgexp{G} pour voir la liste des {1} raisons et montants d'exp que tu as gagné."
 	}
+	"Confirm reset prestige"
+	{
+		"fr"	"Êtes-vous sûr de vouloir réinitialiser le prestige de %N ?"
+	}
+
+	"Confirm set prestige"
+	{
+		"fr"	"Êtes-vous sûr de vouloir définir le prestige de %N à %d ?"
+	}
+
+	"Manage Prestige"
+	{
+		"fr"	"Gérer le prestige"
+	}
+
+	"Reset Prestige to 0"
+	{
+		"fr"	"Réinitialiser le prestige à 0"
+	}
+
+	"Current Prestige"
+	{
+		"fr"	"Prestige actuel"
+	}
+
+	"Prestige"
+	{
+		"fr"	"Prestige"
+	}
+
+	"Inform player prestige reset"
+	{
+		"fr"	"Vous avez réinitialisé le prestige de %N"
+	}
+
+	"Inform player prestige set"
+	{
+		"fr"	"Vous avez défini le prestige de %N à %d"
+	}
 }

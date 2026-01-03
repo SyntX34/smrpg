@@ -171,4 +171,43 @@
 	{
 		"no"			"ADVARSEL: Du vil miste alle Levler, Kreditter, og all Erfaring.\nReset status permanent?"
 	}
+	"Confirm reset prestige"
+	{
+		"no"	"Er du sikker på at du vil tilbakestille prestisjen til %N?"
+	}
+
+	"Confirm set prestige"
+	{
+		"no"	"Er du sikker på at du vil sette prestisjen til %N til %d?"
+	}
+
+	"Manage Prestige"
+	{
+		"no"	"Administrer prestisje"
+	}
+
+	"Reset Prestige to 0"
+	{
+		"no"	"Tilbakestill prestisje til 0"
+	}
+
+	"Current Prestige"
+	{
+		"no"	"Nåværende prestisje"
+	}
+
+	"Prestige"
+	{
+		"no"	"Prestisje"
+	}
+
+	"Inform player prestige reset"
+	{
+		"no"	"Du har tilbakestilt prestisjen til %N"
+	}
+
+	"Inform player prestige set"
+	{
+		"no"	"Du har satt prestisjen til %N til %d"
+	}
 }

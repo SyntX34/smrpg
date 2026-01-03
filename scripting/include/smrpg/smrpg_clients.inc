@@ -278,6 +278,163 @@ forward Action SMRPG_OnAddExperience(int client, const char[] reason, int &iExpe
  */
 forward void SMRPG_OnAddExperiencePost(int client, const char[] reason, int iExperience, int other);
 
+
+/**
+ * Gets a client's current prestige level.
+ *
+ * @param client         The client
+ * @return The client's prestige level (0 = no prestige, 1-8 = prestige levels)
+ * @error Invalid client index
+ */
+native int SMRPG_GetClientPrestigeLevel(int client);
+
+/**
+ * Sets a client's prestige level.
+ *
+ * @param client         The client
+ * @param prestigeLevel  The new prestige level (0-8)
+ * @return True if successful, false otherwise
+ * @error Invalid client index or prestige level out of range
+ */
+native bool SMRPG_SetClientPrestigeLevel(int client, int prestigeLevel);
+
+/**
+ * Gets a client's prestige XP multiplier.
+ * This affects how much XP they earn.
+ *
+ * @param client         The client
+ * @return XP multiplier (e.g., 1.0 = 100%, 0.88 = 88%)
+ * @error Invalid client index
+ */
+native float SMRPG_GetClientPrestigeXPMultiplier(int client);
+
+/**
+ * Gets a client's prestige credit multiplier.
+ * This affects shop credit earnings.
+ *
+ * @param client         The client
+ * @return Credit multiplier (e.g., 1.0 = 100%, 1.05 = 105%)
+ * @error Invalid client index
+ */
+native float SMRPG_GetClientPrestigeCreditMultiplier(int client);
+
+/**
+ * Gets a client's prestige skill points.
+ * Used to unlock special prestige skills.
+ *
+ * @param client         The client
+ * @return Number of prestige skill points
+ * @error Invalid client index
+ */
+native int SMRPG_GetClientPrestigeSkillPoints(int client);
+
+/**
+ * Sets a client's prestige skill points.
+ *
+ * @param client         The client
+ * @param points         Number of prestige skill points
+ * @return True if successful, false otherwise
+ * @error Invalid client index
+ */
+native bool SMRPG_SetClientPrestigeSkillPoints(int client, int points);
+
+/**
+ * Checks if a client is eligible for prestige.
+ *
+ * @param client         The client
+ * @return True if eligible (level >= 1500 and prestige < 8), false otherwise
+ * @error Invalid client index
+ */
+native bool SMRPG_IsClientEligibleForPrestige(int client);
+
+/**
+ * Resets a client to a new prestige level.
+ * This resets their RPG stats and applies prestige bonuses.
+ *
+ * @param client         The client
+ * @param newPrestige    The new prestige level (1-8)
+ * @return True if successful, false otherwise
+ * @error Invalid client index
+ */
+native bool SMRPG_ResetClientToPrestige(int client, int newPrestige);
+
+/**
+ * Called when a client is about to prestige.
+ * You can block this by returning Plugin_Handled.
+ *
+ * @param client         The client who is prestiging
+ * @param oldPrestige    The current prestige level (before prestiging)
+ * @param newPrestige    The new prestige level (after prestiging)
+ * @return >= Plugin_Handled to block, Plugin_Continue to allow
+ */
+forward Action SMRPG_OnClientPrestige(int client, int oldPrestige, int newPrestige);
+
+/**
+ * Called after a client has prestiged.
+ *
+ * @param client         The client who prestiged
+ * @param oldPrestige    The old prestige level
+ * @param newPrestige    The new prestige level
+ */
+forward void SMRPG_OnClientPrestigePost(int client, int oldPrestige, int newPrestige);
+
+/**
+ * Called when checking if a client can see/buy an upgrade based on prestige.
+ *
+ * @param client         The client
+ * @param upgrade        The upgrade shortname
+ * @param currentLevel   The client's current upgrade level
+ * @param prestigeLevel  The client's prestige level
+ * @return True if allowed, false if restricted
+ */
+forward bool SMRPG_CanClientUseUpgrade(int client, const char[] upgrade, int currentLevel, int prestigeLevel);
+
+/**
+ * Gets a client's current prestige max level.
+ *
+ * @param client         The client
+ * @return The max level for current prestige
+ * @error Invalid client index
+ */
+native int SMRPG_GetClientPrestigeMaxLevel(int client);
+
+/**
+ * Sets a client's prestige max level.
+ *
+ * @param client         The client
+ * @param maxLevel       The new max level for current prestige
+ * @return True if successful, false otherwise
+ * @error Invalid client index
+ */
+native bool SMRPG_SetClientPrestigeMaxLevel(int client, int maxLevel);
+
+/**
+ * Gets a client's prestige unlocked skills list.
+ *
+ * @param client         The client
+ * @return ArrayList handle of unlocked skills
+ * @error Invalid client index
+ */
+native ArrayList SMRPG_GetClientPrestigeUnlockedSkills(int client);
+
+/**
+ * Set a client's prestige XP multiplier.
+ *
+ * @param client            Client index.
+ * @param multiplier        XP multiplier value.
+ * @return                  True on success, false on failure.
+ */
+native bool SMRPG_SetClientPrestigeXPMultiplier(int client, float multiplier);
+
+/**
+ * Set a client's prestige credit multiplier.
+ *
+ * @param client            Client index.
+ * @param multiplier        Credit multiplier value.
+ * @return                  True on success, false on failure.
+ */
+native bool SMRPG_SetClientPrestigeCreditMultiplier(int client, float multiplier);
+
 /**
  * Types of experience multipliers that can be set individually per weapon.
  */

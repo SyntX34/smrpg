@@ -171,4 +171,43 @@
 	{
 		"it"			"WARNING: Perderai tutti i livelli, i crediti, e l'esperienza.\nCancelli le statistiche permanentemente?"
 	}
+	"Confirm reset prestige"
+	{
+		"it"	"Sei sicuro di voler reimpostare il prestigio di %N?"
+	}
+
+	"Confirm set prestige"
+	{
+		"it"	"Sei sicuro di voler impostare il prestigio di %N a %d?"
+	}
+
+	"Manage Prestige"
+	{
+		"it"	"Gestisci prestigio"
+	}
+
+	"Reset Prestige to 0"
+	{
+		"it"	"Reimposta prestigio a 0"
+	}
+
+	"Current Prestige"
+	{
+		"it"	"Prestigio attuale"
+	}
+
+	"Prestige"
+	{
+		"it"	"Prestigio"
+	}
+
+	"Inform player prestige reset"
+	{
+		"it"	"Hai reimpostato il prestigio di %N"
+	}
+
+	"Inform player prestige set"
+	{
+		"it"	"Hai impostato il prestigio di %N a %d"
+	}
 }

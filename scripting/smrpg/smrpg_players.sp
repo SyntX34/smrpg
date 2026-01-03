@@ -16,6 +16,9 @@ Handle g_hfwdOnClientCreditsPost;
 
 Handle g_hfwdOnClientLoaded;
 
+Handle g_hfwdOnClientPrestige;
+Handle g_hfwdOnClientPrestigePost;
+
 enum struct PlayerUpgradeInfo {
 	int purchasedlevel;
 	int selectedlevel;
@@ -36,6 +39,12 @@ enum struct PlayerInfo
 	ArrayList upgrades;
 	int lastReset;
 	int lastSeen;
+	int prestigeLevel;
+	int prestigeSkillPoints;
+	float prestigeXPMultiplier;
+	float prestigeCreditMultiplier;
+	ArrayList prestigeUnlockedSkills;
+	int prestigeMaxLevel;
 }
 
 PlayerInfo g_iPlayerInfo[MAXPLAYERS+1];
@@ -64,6 +73,20 @@ void RegisterPlayerNatives()
 	CreateNative("SMRPG_GetClientLastSeenTime", Native_GetClientLastSeenTime);
 	
 	CreateNative("SMRPG_ClientWantsCosmetics", Native_ClientWantsCosmetics);
+
+	CreateNative("SMRPG_GetClientPrestigeLevel", Native_GetClientPrestigeLevel);
+	CreateNative("SMRPG_SetClientPrestigeLevel", Native_SetClientPrestigeLevel);
+	CreateNative("SMRPG_GetClientPrestigeXPMultiplier", Native_GetClientPrestigeXPMultiplier);
+	CreateNative("SMRPG_SetClientPrestigeXPMultiplier", Native_SetClientPrestigeXPMultiplier); 
+	CreateNative("SMRPG_GetClientPrestigeCreditMultiplier", Native_GetClientPrestigeCreditMultiplier);
+	CreateNative("SMRPG_SetClientPrestigeCreditMultiplier", Native_SetClientPrestigeCreditMultiplier);
+	CreateNative("SMRPG_GetClientPrestigeSkillPoints", Native_GetClientPrestigeSkillPoints);
+	CreateNative("SMRPG_SetClientPrestigeSkillPoints", Native_SetClientPrestigeSkillPoints);
+	CreateNative("SMRPG_IsClientEligibleForPrestige", Native_IsClientEligibleForPrestige);
+	CreateNative("SMRPG_ResetClientToPrestige", Native_ResetClientToPrestige);
+	CreateNative("SMRPG_GetClientPrestigeMaxLevel", Native_GetClientPrestigeMaxLevel);
+	CreateNative("SMRPG_SetClientPrestigeMaxLevel", Native_SetClientPrestigeMaxLevel);
+	CreateNative("SMRPG_GetClientPrestigeUnlockedSkills", Native_GetClientPrestigeUnlockedSkills);
 }
 
 void RegisterPlayerForwards()
@@ -92,6 +115,9 @@ void RegisterPlayerForwards()
 	
 	// forward void SMRPG_OnClientLoaded(int client);
 	g_hfwdOnClientLoaded = CreateGlobalForward("SMRPG_OnClientLoaded", ET_Ignore, Param_Cell);
+
+	g_hfwdOnClientPrestige = CreateGlobalForward("SMRPG_OnClientPrestige", ET_Hook, Param_Cell, Param_Cell, Param_Cell);
+    g_hfwdOnClientPrestigePost = CreateGlobalForward("SMRPG_OnClientPrestigePost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell);
 }
 
 /**
@@ -114,6 +140,14 @@ void InitPlayer(int client, bool bGetBotName = true)
 	g_iPlayerInfo[client].fadeOnLevelup = g_hCVFadeOnLevelDefault.BoolValue;
 	g_iPlayerInfo[client].lastReset = GetTime();
 	g_iPlayerInfo[client].lastSeen = GetTime();
+
+	// External plugin should set all these values when player loads
+	g_iPlayerInfo[client].prestigeLevel = 0;
+	g_iPlayerInfo[client].prestigeSkillPoints = 0;
+	g_iPlayerInfo[client].prestigeXPMultiplier = 1.0;
+	g_iPlayerInfo[client].prestigeCreditMultiplier = 1.0;
+	g_iPlayerInfo[client].prestigeUnlockedSkills = new ArrayList(ByteCountToCells(64));
+	g_iPlayerInfo[client].prestigeMaxLevel = 0;
 	
 	g_iPlayerInfo[client].upgrades = new ArrayList(sizeof(PlayerUpgradeInfo));
 	int iNumUpgrades = GetUpgradeCount();
@@ -246,6 +280,7 @@ bool SaveData(int client, Transaction hTransaction=null)
 	
 	// Save upgrade levels
 	SavePlayerUpgradeLevels(client, hTransaction);
+	SavePlayerPrestigeData(client, hTransaction);
 	
 	return true;
 }
@@ -285,6 +320,95 @@ void SavePlayerUpgradeLevels(int client, Transaction hTransaction=null)
 	}
 }
 
+void SavePlayerPrestigeData(int client, Transaction hTransaction=null)
+{
+    if(g_iPlayerInfo[client].dbId < 0)
+        return;
+    
+    char sQuery[1024];
+    char skillString[512];
+    
+    // Create comma-separated skill string
+    CreateSkillString(g_iPlayerInfo[client].prestigeUnlockedSkills, skillString, sizeof(skillString));
+    
+    // Escape skill string for SQL
+    char skillStringEscaped[1024];
+    if(g_hDatabase != null)
+    {
+        g_hDatabase.Escape(skillString, skillStringEscaped, sizeof(skillStringEscaped));
+    }
+    else
+    {
+        strcopy(skillStringEscaped, sizeof(skillStringEscaped), skillString);
+    }
+    
+    // Check if prestige record exists
+    Format(sQuery, sizeof(sQuery), 
+        "SELECT prestige_id FROM %s WHERE player_id = %d",
+        TBL_PRESTIGE, g_iPlayerInfo[client].dbId
+    );
+    
+    DataPack pack = new DataPack();
+    pack.WriteCell(GetClientUserId(client));
+    pack.WriteString(skillStringEscaped);
+    
+    g_hDatabase.Query(SQL_CheckPrestigeExists, sQuery, pack);
+}
+
+public void SQL_CheckPrestigeExists(Database db, DBResultSet results, const char[] error, DataPack pack)
+{
+    pack.Reset();
+    int userid = pack.ReadCell();
+    char skillStringEscaped[1024];
+    pack.ReadString(skillStringEscaped, sizeof(skillStringEscaped));
+    delete pack;
+    
+    int client = GetClientOfUserId(userid);
+    if(!client)
+        return;
+    
+    if(results == null)
+    {
+        LogError("Error checking prestige existence: %s", error);
+        return;
+    }
+    
+    char sQuery[1024];
+    
+    if(results.FetchRow() && results.RowCount > 0)
+    {
+        // Update existing record
+        Format(sQuery, sizeof(sQuery), "UPDATE %s SET prestige_level = %d, prestige_skillpoints = %d, prestige_xp_multiplier = %f, prestige_credit_multiplier = %f, prestige_unlocked_skills = '%s', prestige_max_level = %d WHERE player_id = %d",
+            TBL_PRESTIGE,
+            g_iPlayerInfo[client].prestigeLevel,
+            g_iPlayerInfo[client].prestigeSkillPoints,
+            g_iPlayerInfo[client].prestigeXPMultiplier,
+            g_iPlayerInfo[client].prestigeCreditMultiplier,
+            skillStringEscaped,
+            g_iPlayerInfo[client].prestigeMaxLevel,
+            g_iPlayerInfo[client].dbId
+        );
+    }
+    else
+    {
+        // Insert new record
+        Format(sQuery, sizeof(sQuery), 
+            "INSERT INTO %s ( \
+                player_id, prestige_level, prestige_skillpoints, prestige_xp_multiplier, prestige_credit_multiplier, prestige_unlocked_skills, prestige_max_level) VALUES (%d, %d, %d, %f, %f, '%s', %d)",
+            TBL_PRESTIGE,
+            g_iPlayerInfo[client].dbId,
+            g_iPlayerInfo[client].prestigeLevel,
+            g_iPlayerInfo[client].prestigeSkillPoints,
+            g_iPlayerInfo[client].prestigeXPMultiplier,
+            g_iPlayerInfo[client].prestigeCreditMultiplier,
+            skillStringEscaped,
+            g_iPlayerInfo[client].prestigeMaxLevel
+        );
+    }
+    
+    g_hDatabase.Query(SQL_DoNothing, sQuery);
+}
+
 void SaveAllPlayers()
 {
 	if(g_hDatabase == null)
@@ -309,6 +433,16 @@ void SaveAllPlayers()
 void ResetStats(int client)
 {
 	DebugMsg("Stats have been reset for player: %N", client);
+	g_iPlayerInfo[client].prestigeLevel = 0;
+	g_iPlayerInfo[client].prestigeSkillPoints = 0;
+	g_iPlayerInfo[client].prestigeXPMultiplier = 1.0;
+	g_iPlayerInfo[client].prestigeCreditMultiplier = 1.0;
+	if(g_iPlayerInfo[client].prestigeUnlockedSkills != null)
+	{
+		g_iPlayerInfo[client].prestigeUnlockedSkills.Clear();
+	}
+	
+	g_iPlayerInfo[client].prestigeMaxLevel = 0;
 	
 	int iSize = GetUpgradeCount();
 	InternalUpgradeInfo upgrade;
@@ -992,9 +1126,15 @@ public void SQL_GetPlayerInfo(Database db, DBResultSet results, const char[] err
 	UpdateRankCount();
 	
 	/* Player Upgrades */
-	char sQuery[128];
+	char sQuery[256];
 	Format(sQuery, sizeof(sQuery), "SELECT upgrade_id, purchasedlevel, selectedlevel, enabled, visuals, sounds FROM %s WHERE player_id = %d", TBL_PLAYERUPGRADES, g_iPlayerInfo[client].dbId);
 	g_hDatabase.Query(SQL_GetPlayerUpgrades, sQuery, userid);
+
+	Format(sQuery, sizeof(sQuery), "SELECT prestige_level, prestige_skillpoints, prestige_xp_multiplier, prestige_credit_multiplier, prestige_unlocked_skills, prestige_max_level FROM %s WHERE player_id = %d", 
+		TBL_PRESTIGE, g_iPlayerInfo[client].dbId
+	);
+	
+	g_hDatabase.Query(SQL_GetPlayerPrestigeInfo, sQuery, userid);
 }
 
 public void SQL_GetPlayerUpgrades(Database db, DBResultSet results, const char[] error, any userid)
@@ -1054,6 +1194,36 @@ public void SQL_GetPlayerUpgrades(Database db, DBResultSet results, const char[]
 	CheckItemMaxLevels(client);
 	
 	CallOnClientLoaded(client);
+}
+
+public void SQL_GetPlayerPrestigeInfo(Database db, DBResultSet results, const char[] error, any userid)
+{
+	int client = GetClientOfUserId(userid);
+	if(!client)
+		return;
+	
+	if(results == null)
+	{
+		LogError("Error loading prestige data: %s", error);
+		return;
+	}
+	
+	if(results.FetchRow())
+	{
+		g_iPlayerInfo[client].prestigeLevel = results.FetchInt(0);
+		g_iPlayerInfo[client].prestigeSkillPoints = results.FetchInt(1);
+		g_iPlayerInfo[client].prestigeXPMultiplier = results.FetchFloat(2);
+		g_iPlayerInfo[client].prestigeCreditMultiplier = results.FetchFloat(3);
+		
+		// Parse unlocked skills
+		char skillString[512];
+		// Updated index from 5 to 4 since VIP seconds was removed
+		results.FetchString(4, skillString, sizeof(skillString));
+		ParseSkillString(skillString, g_iPlayerInfo[client].prestigeUnlockedSkills);
+		
+		// Updated index from 6 to 5 since VIP seconds was removed
+		g_iPlayerInfo[client].prestigeMaxLevel = results.FetchInt(5);
+	}
 }
 
 public void SQL_InsertPlayer(Database db, DBResultSet results, const char[] error, any userid)
@@ -1399,6 +1569,274 @@ public int Native_ClientWantsCosmetics(Handle plugin, int numParams)
 	
 	return false;
 }
+
+public int Native_GetClientPrestigeLevel(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	if(client < 0 || client > MaxClients)
+		return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d.", client);
+	
+	return g_iPlayerInfo[client].prestigeLevel;
+}
+
+public int Native_SetClientPrestigeLevel(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	if(client < 0 || client > MaxClients)
+		return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d.", client);
+	
+	int prestigeLevel = GetNativeCell(2);
+	if(prestigeLevel < 0 || prestigeLevel > 8)
+		return ThrowNativeError(SP_ERROR_NATIVE, "Invalid prestige level %d. Must be 0-8.", prestigeLevel);
+	
+	g_iPlayerInfo[client].prestigeLevel = prestigeLevel;
+	return 1;
+}
+
+public int Native_GetClientPrestigeXPMultiplier(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if(client < 0 || client > MaxClients)
+        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d.", client);
+    
+    // FIX: Use SetNativeCell to return float properly
+    SetNativeCellRef(2, g_iPlayerInfo[client].prestigeXPMultiplier);
+    return 1;
+}
+
+public int Native_GetClientPrestigeCreditMultiplier(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if(client < 0 || client > MaxClients)
+        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d.", client);
+    
+    // FIX: Use SetNativeCell to return float properly
+    SetNativeCellRef(2, g_iPlayerInfo[client].prestigeCreditMultiplier);
+    return 1;
+}
+
+public int Native_IsClientEligibleForPrestige(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if(client < 0 || client > MaxClients)
+        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d.", client);
+
+    if(g_iPlayerInfo[client].prestigeLevel >= 8)
+        return false;
+    
+    // Note: External plugin should check if player has reached required level
+    // using SMRPG_GetClientPrestigeMaxLevel and SMRPG_GetClientLevel
+    
+    return true;
+}
+
+public int Native_GetClientPrestigeSkillPoints(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if(client < 0 || client > MaxClients)
+        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d.", client);
+    
+    return g_iPlayerInfo[client].prestigeSkillPoints;
+}
+
+public int Native_SetClientPrestigeSkillPoints(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if(client < 0 || client > MaxClients)
+        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d.", client);
+    
+    int points = GetNativeCell(2);
+    if(points < 0)
+        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid skill points %d. Must be >= 0.", points);
+    
+    g_iPlayerInfo[client].prestigeSkillPoints = points;
+    return 1;
+}
+
+public int Native_ResetClientToPrestige(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if(client < 0 || client > MaxClients)
+        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d.", client);
+    
+    int newPrestige = GetNativeCell(2);
+    if(newPrestige < 1 || newPrestige > 8)
+        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid prestige level %d. Must be 1-8.", newPrestige);
+    
+    // Call forward to let other plugins know
+    Action result;
+    Call_StartForward(g_hfwdOnClientPrestige);
+    Call_PushCell(client);
+    Call_PushCell(g_iPlayerInfo[client].prestigeLevel);
+    Call_PushCell(newPrestige);
+    Call_Finish(result);
+    
+    if(result >= Plugin_Handled)
+        return false;
+    
+    // Reset player stats
+    ResetStats(client);
+    
+    // Set new prestige level
+    g_iPlayerInfo[client].prestigeLevel = newPrestige;
+    
+    g_iPlayerInfo[client].prestigeXPMultiplier = 1.0;
+    g_iPlayerInfo[client].prestigeCreditMultiplier = 1.0;
+    g_iPlayerInfo[client].prestigeSkillPoints = 0;
+    g_iPlayerInfo[client].prestigeMaxLevel = 0;
+    
+    g_iPlayerInfo[client].prestigeUnlockedSkills.Clear();
+    
+    g_iPlayerInfo[client].lastReset = GetTime();
+    
+    // Call post forward
+    Call_StartForward(g_hfwdOnClientPrestigePost);
+    Call_PushCell(client);
+    Call_PushCell(newPrestige - 1); // old prestige
+    Call_PushCell(newPrestige);     // new prestige
+    Call_Finish();
+    
+    return true;
+}
+
+public int Native_GetClientPrestigeMaxLevel(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if(client < 0 || client > MaxClients)
+        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d.", client);
+    
+    return g_iPlayerInfo[client].prestigeMaxLevel;
+}
+
+public int Native_SetClientPrestigeMaxLevel(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if(client < 0 || client > MaxClients)
+        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d.", client);
+    
+    int maxLevel = GetNativeCell(2);
+    if(maxLevel < 1)
+        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid max level %d. Must be >= 1.", maxLevel);
+    
+    g_iPlayerInfo[client].prestigeMaxLevel = maxLevel;
+    return 1;
+}
+
+public int Native_GetClientPrestigeUnlockedSkills(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if(client < 0 || client > MaxClients)
+        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d.", client);
+    
+    // Return the ArrayList handle
+    return view_as<int>(g_iPlayerInfo[client].prestigeUnlockedSkills);
+}
+
+public int Native_SetClientPrestigeXPMultiplier(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if(client < 0 || client > MaxClients)
+        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d.", client);
+    
+    float multiplier = GetNativeCell(2);
+    if(multiplier < 0.0)
+        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid XP multiplier %f. Must be >= 0.0.", multiplier);
+    
+    g_iPlayerInfo[client].prestigeXPMultiplier = multiplier;
+    return 1;
+}
+
+public int Native_SetClientPrestigeCreditMultiplier(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if(client < 0 || client > MaxClients)
+        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d.", client);
+    
+    float multiplier = GetNativeCell(2);
+    if(multiplier < 0.0)
+        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid credit multiplier %f. Must be >= 0.0.", multiplier);
+    
+    g_iPlayerInfo[client].prestigeCreditMultiplier = multiplier;
+    return 1;
+}
+
+// Helper function to parse skill string
+void ParseSkillString(const char[] skillString, ArrayList skillList)
+{
+    skillList.Clear();
+    
+    if(StrEqual(skillString, "") || StrEqual(skillString, "NULL"))
+        return;
+    
+    char buffer[512];
+    strcopy(buffer, sizeof(buffer), skillString);
+    
+    char skills[32][32];
+    int count = ExplodeString(buffer, ",", skills, sizeof(skills), sizeof(skills[]));
+    
+    for(int i = 0; i < count; i++)
+    {
+        TrimString(skills[i]);
+        if(strlen(skills[i]) > 0)
+        {
+            skillList.PushString(skills[i]);
+        }
+    }
+}
+
+// Helper function to create skill string
+void CreateSkillString(ArrayList skillList, char[] buffer, int maxlen)
+{
+    buffer[0] = '\0';
+    
+    int count = skillList.Length;
+    for(int i = 0; i < count; i++)
+    {
+        char skill[32];
+        skillList.GetString(i, skill, sizeof(skill));
+        
+        if(i > 0)
+            StrCat(buffer, maxlen, ",");
+        StrCat(buffer, maxlen, skill);
+    }
+    
+    if(strlen(buffer) == 0)
+        strcopy(buffer, maxlen, "");
+}
+
+
+
+/**
+ * Apply prestige multiplier to experience
+ */
+
+/*
+int ApplyPrestigeExperienceMultiplier(int client, int experience)
+{
+    if(g_iPlayerInfo[client].prestigeLevel > 0 && g_iPlayerInfo[client].prestigeXPMultiplier != 1.0)
+    {
+        return RoundToCeil(experience * g_iPlayerInfo[client].prestigeXPMultiplier);
+    }
+    return experience;
+}
+
+*/
+
+/**
+ * Apply prestige multiplier to credits
+ */
+
+/*
+int ApplyPrestigeCreditMultiplier(int client, int credits)
+{
+    if(g_iPlayerInfo[client].prestigeLevel > 0 && g_iPlayerInfo[client].prestigeCreditMultiplier != 1.0)
+    {
+        return RoundToCeil(credits * g_iPlayerInfo[client].prestigeCreditMultiplier);
+    }
+    return credits;
+}
+
+*/
 
 /**
  * Helpers
