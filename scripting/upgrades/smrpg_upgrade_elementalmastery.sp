@@ -24,6 +24,7 @@ ConVar g_hCVElementSwitchTime;
 
 Handle g_hElementTimer[MAXPLAYERS+1];
 Handle g_hAutoSwitchTimer[MAXPLAYERS+1];
+Handle g_hFireDamageTimer[MAXPLAYERS+1];
 bool g_bElementActive[MAXPLAYERS+1];
 bool g_bUpgradeLoaded = false;
 
@@ -99,6 +100,7 @@ public void OnClientPutInServer(int client)
     g_iCurrentElement[client] = ELEMENT_FIRE;
     g_hElementTimer[client] = null;
     g_hAutoSwitchTimer[client] = null;
+    g_hFireDamageTimer[client] = null;
     g_bElementActive[client] = false;
     
     // Hook for damage dealt
@@ -123,6 +125,13 @@ void ClearClientTimers(int client)
     {
         KillTimer(g_hAutoSwitchTimer[client]);
         g_hAutoSwitchTimer[client] = null;
+    }
+    
+    // Clean up fire damage timer
+    if(g_hFireDamageTimer[client] != null)
+    {
+        KillTimer(g_hFireDamageTimer[client]);
+        g_hFireDamageTimer[client] = null;
     }
 }
 
@@ -179,7 +188,7 @@ public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &dam
                 }
                 else
                 {
-                    damage *= 1.5; // Default multiplier
+                    damage *= 1.5;
                 }
                 
                 // Apply elemental effect based on current element
@@ -202,8 +211,16 @@ void ApplyElementalEffect(int victim, int attacker, ElementType element)
     {
         case ELEMENT_FIRE:
         {
-            // Burn effect - DoT over time
-            CreateTimer(1.0, FireDamage_Timer, GetClientUserId(victim), TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+            if(g_hFireDamageTimer[victim] != null)
+            {
+                KillTimer(g_hFireDamageTimer[victim]);
+                g_hFireDamageTimer[victim] = null;
+            }
+            
+            DataPack pack = new DataPack();
+            pack.WriteCell(GetClientUserId(victim));
+            pack.WriteCell(GetClientUserId(attacker));
+            g_hFireDamageTimer[victim] = CreateTimer(1.0, FireDamage_Timer, pack, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
             // PrintToChat(attacker, "Fire damage applied to %N!", victim);
         }
         case ELEMENT_ICE:
@@ -212,7 +229,9 @@ void ApplyElementalEffect(int victim, int attacker, ElementType element)
             if(IsPlayerAlive(victim))
             {
                 SetEntPropFloat(victim, Prop_Send, "m_flLaggedMovementValue", 0.5);
-                CreateTimer(3.0, ResetMovement_Timer, GetClientUserId(victim));
+                DataPack pack = new DataPack();
+                pack.WriteCell(GetClientUserId(victim));
+                CreateTimer(3.0, ResetMovement_Timer, pack);
                 // PrintToChat(attacker, "Ice slow applied to %N!", victim);
             }
         }
@@ -228,11 +247,12 @@ void ApplyElementalEffect(int victim, int attacker, ElementType element)
         }
         case ELEMENT_EARTH:
         {
-            // Stun effect - stop movement briefly
             if(IsPlayerAlive(victim) && GetEntityMoveType(victim) != MOVETYPE_NONE)
             {
                 SetEntityMoveType(victim, MOVETYPE_NONE);
-                CreateTimer(1.5, ResetMovementType_Timer, GetClientUserId(victim));
+                DataPack pack = new DataPack();
+                pack.WriteCell(GetClientUserId(victim));
+                CreateTimer(1.5, ResetMovementType_Timer, pack);
                 //PrintToChat(attacker, "Earth stun applied to %N!", victim);
             }
         }
@@ -343,23 +363,31 @@ public Action AutoSwitchElement_Timer(Handle timer, DataPack pack)
     return Plugin_Stop;
 }
 
-public Action FireDamage_Timer(Handle timer, any userid)
+public Action FireDamage_Timer(Handle timer, DataPack pack)
 {
-    int victim = GetClientOfUserId(userid);
+    pack.Reset();
+    int victim = GetClientOfUserId(pack.ReadCell());
+    int attacker = GetClientOfUserId(pack.ReadCell());
     
     if(victim > 0 && IsClientInGame(victim) && IsPlayerAlive(victim))
     {
         // Deal damage over time
-        SDKHooks_TakeDamage(victim, 0, 0, 5.0, DMG_BURN);
+        SDKHooks_TakeDamage(victim, attacker, attacker, 5.0, DMG_BURN);
         return Plugin_Continue;
     }
     
+    // Victim died or disconnected
+    delete pack;
+    g_hFireDamageTimer[victim] = null;
     return Plugin_Stop;
 }
 
-public Action ResetMovement_Timer(Handle timer, any userid)
+public Action ResetMovement_Timer(Handle timer, DataPack pack)
 {
-    int client = GetClientOfUserId(userid);
+    pack.Reset();
+    int client = GetClientOfUserId(pack.ReadCell());
+    delete pack;
+    
     if(client > 0 && IsClientInGame(client) && IsPlayerAlive(client))
     {
         SetEntPropFloat(client, Prop_Send, "m_flLaggedMovementValue", 1.0);
@@ -367,9 +395,12 @@ public Action ResetMovement_Timer(Handle timer, any userid)
     return Plugin_Stop;
 }
 
-public Action ResetMovementType_Timer(Handle timer, any userid)
+public Action ResetMovementType_Timer(Handle timer, DataPack pack)
 {
-    int client = GetClientOfUserId(userid);
+    pack.Reset();
+    int client = GetClientOfUserId(pack.ReadCell());
+    delete pack;
+    
     if(client > 0 && IsClientInGame(client) && IsPlayerAlive(client))
     {
         SetEntityMoveType(client, MOVETYPE_WALK);
