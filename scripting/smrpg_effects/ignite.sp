@@ -36,7 +36,12 @@ void ResetIgniteClient(int client, bool bDisconnect)
 	if(g_hIgnitePlugin[client] != null && IsClientInGame(client))
 		ExtinguishClient(client);
 	ResetClientIgniteState(client);
-	ClearHandle(g_hExtinguish[client]);
+	
+	if(g_hExtinguish[client] != null)
+	{
+		delete g_hExtinguish[client];
+		g_hExtinguish[client] = null;
+	}
 	
 	// Extinguish again a few frames later, so ragdolls don't burn.
 	if(!bDisconnect)
@@ -52,7 +57,8 @@ public Action Timer_Extinguish(Handle timer, any userid)
 	if(!client)
 		return Plugin_Stop;
 	
-	g_hExtinguish[client] = null;
+	if(g_hExtinguish[client] == timer)
+		g_hExtinguish[client] = null;
 	
 	ExtinguishClient(client);
 	
@@ -213,6 +219,12 @@ void ExtinguishClient(int client)
 	
 	Help_ResetClientToDefaultColor(g_hIgnitePlugin[client], client, true, true, true, false);
 	ResetClientIgniteState(client);
+	
+	if(g_hExtinguish[client] != null)
+	{
+		delete g_hExtinguish[client];
+		g_hExtinguish[client] = null;
+	}
 	
 	Call_StartForward(g_hfwdOnClientExtinguished);
 	Call_PushCell(client);
