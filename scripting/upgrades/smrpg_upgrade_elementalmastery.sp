@@ -8,6 +8,9 @@
 #include <smrpg_effects>
 
 #define UPGRADE_SHORTNAME "elementalmastery"
+#define ICE_SLOW_DURATION 3.0
+#define EARTH_STUN_DURATION 1.5
+#define FIRE_DURATION 5.0
 
 enum ElementType
 {
@@ -25,8 +28,13 @@ ConVar g_hCVElementSwitchTime;
 Handle g_hElementTimer[MAXPLAYERS+1];
 Handle g_hAutoSwitchTimer[MAXPLAYERS+1];
 Handle g_hFireDamageTimer[MAXPLAYERS+1];
+Handle g_hSlowResetTimer[MAXPLAYERS+1];
+Handle g_hStunResetTimer[MAXPLAYERS+1];
 bool g_bElementActive[MAXPLAYERS+1];
 bool g_bUpgradeLoaded = false;
+float g_fOriginalSpeed[MAXPLAYERS+1];
+MoveType g_mOriginalMoveType[MAXPLAYERS+1];
+float g_fFireDamageEndTime[MAXPLAYERS+1];
 
 public Plugin myinfo = 
 {
@@ -75,7 +83,6 @@ public void OnLibraryAdded(const char[] name)
         
         g_bUpgradeLoaded = true;
         
-        // Initialize auto-switch for any clients that already have the upgrade
         for(int i = 1; i <= MaxClients; i++)
         {
             if(IsClientInGame(i) && SMRPG_GetClientUpgradeLevel(i, UPGRADE_SHORTNAME) > 0)
@@ -101,9 +108,13 @@ public void OnClientPutInServer(int client)
     g_hElementTimer[client] = null;
     g_hAutoSwitchTimer[client] = null;
     g_hFireDamageTimer[client] = null;
+    g_hSlowResetTimer[client] = null;
+    g_hStunResetTimer[client] = null;
     g_bElementActive[client] = false;
+    g_fOriginalSpeed[client] = 1.0;
+    g_mOriginalMoveType[client] = MOVETYPE_WALK;
+    g_fFireDamageEndTime[client] = 0.0;
     
-    // Hook for damage dealt
     SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
 }
 
@@ -127,11 +138,22 @@ void ClearClientTimers(int client)
         g_hAutoSwitchTimer[client] = null;
     }
     
-    // Clean up fire damage timer
     if(g_hFireDamageTimer[client] != null)
     {
         KillTimer(g_hFireDamageTimer[client]);
         g_hFireDamageTimer[client] = null;
+    }
+    
+    if(g_hSlowResetTimer[client] != null)
+    {
+        KillTimer(g_hSlowResetTimer[client]);
+        g_hSlowResetTimer[client] = null;
+    }
+    
+    if(g_hStunResetTimer[client] != null)
+    {
+        KillTimer(g_hStunResetTimer[client]);
+        g_hStunResetTimer[client] = null;
     }
 }
 
@@ -211,33 +233,60 @@ void ApplyElementalEffect(int victim, int attacker, ElementType element)
     {
         case ELEMENT_FIRE:
         {
-            if(g_hFireDamageTimer[victim] != null)
+            // Fire effect - damage over time for 5 seconds
+            if(IsPlayerAlive(victim))
             {
-                KillTimer(g_hFireDamageTimer[victim]);
-                g_hFireDamageTimer[victim] = null;
+                // If fire is already active, just extend the duration
+                if(g_hFireDamageTimer[victim] != null)
+                {
+                    g_fFireDamageEndTime[victim] = GetGameTime() + FIRE_DURATION;
+                    // PrintToChat(attacker, "Fire duration extended on %N!", victim);
+                }
+                else
+                {
+                    // Start new fire damage
+                    g_fFireDamageEndTime[victim] = GetGameTime() + FIRE_DURATION;
+                    
+                    DataPack pack = new DataPack();
+                    pack.WriteCell(GetClientUserId(victim));
+                    pack.WriteCell(GetClientUserId(attacker));
+                    g_hFireDamageTimer[victim] = CreateTimer(1.0, FireDamage_Timer, pack, TIMER_REPEAT);
+                    // PrintToChat(attacker, "Fire damage applied to %N!", victim);
+                }
             }
-            
-            DataPack pack = new DataPack();
-            pack.WriteCell(GetClientUserId(victim));
-            pack.WriteCell(GetClientUserId(attacker));
-            g_hFireDamageTimer[victim] = CreateTimer(1.0, FireDamage_Timer, pack, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
-            // PrintToChat(attacker, "Fire damage applied to %N!", victim);
         }
         case ELEMENT_ICE:
         {
             // Slow effect
             if(IsPlayerAlive(victim))
             {
+                // Store original speed if we haven't already
+                if(g_hSlowResetTimer[victim] == null)
+                {
+                    g_fOriginalSpeed[victim] = GetEntPropFloat(victim, Prop_Send, "m_flLaggedMovementValue");
+                }
+                else
+                {
+                    // Already slowed, just refresh the timer
+                    KillTimer(g_hSlowResetTimer[victim]);
+                    g_hSlowResetTimer[victim] = null;
+                }
+                
+                // Apply slow
                 SetEntPropFloat(victim, Prop_Send, "m_flLaggedMovementValue", 0.5);
+                
+                // Create timer to reset movement speed
                 DataPack pack = new DataPack();
                 pack.WriteCell(GetClientUserId(victim));
-                CreateTimer(3.0, ResetMovement_Timer, pack);
+                pack.WriteFloat(g_fOriginalSpeed[victim]);
+                g_hSlowResetTimer[victim] = CreateTimer(ICE_SLOW_DURATION, ResetMovement_Timer, pack);
+                
                 // PrintToChat(attacker, "Ice slow applied to %N!", victim);
             }
         }
         case ELEMENT_LIGHTNING:
         {
-            // Shock effect - extra damage
+            // Shock effect - instant extra damage (no lasting effects)
             float extraDamage = 10.0;
             if(IsPlayerAlive(victim))
             {
@@ -249,11 +298,26 @@ void ApplyElementalEffect(int victim, int attacker, ElementType element)
         {
             if(IsPlayerAlive(victim) && GetEntityMoveType(victim) != MOVETYPE_NONE)
             {
+                // If already stunned, don't re-stun
+                if(g_hStunResetTimer[victim] != null)
+                {
+                    // PrintToChat(attacker, "%N is already stunned!", victim);
+                    return;
+                }
+                
+                // Store original move type
+                g_mOriginalMoveType[victim] = GetEntityMoveType(victim);
+                
+                // Apply stun
                 SetEntityMoveType(victim, MOVETYPE_NONE);
+                
+                // Create timer to reset movement
                 DataPack pack = new DataPack();
                 pack.WriteCell(GetClientUserId(victim));
-                CreateTimer(1.5, ResetMovementType_Timer, pack);
-                //PrintToChat(attacker, "Earth stun applied to %N!", victim);
+                pack.WriteCell(view_as<int>(g_mOriginalMoveType[victim]));
+                g_hStunResetTimer[victim] = CreateTimer(EARTH_STUN_DURATION, ResetMovementType_Timer, pack);
+                
+                // PrintToChat(attacker, "Earth stun applied to %N!", victim);
             }
         }
     }
@@ -288,19 +352,19 @@ public Action Command_SwitchElement(int client, int args)
         
     if(g_hElementTimer[client] != null)
     {
-        //PrintToChat(client, "Element switch is on cooldown!");
+        // PrintToChat(client, "Element switch is on cooldown!");
         return Plugin_Handled;
     }
     
     if(!IsPlayerAlive(client))
     {
-        //PrintToChat(client, "You must be alive to switch elements!");
+        // PrintToChat(client, "You must be alive to switch elements!");
         return Plugin_Handled;
     }
     
     if(SMRPG_GetClientUpgradeLevel(client, UPGRADE_SHORTNAME) == 0)
     {
-        //PrintToChat(client, "You don't have the Elemental Mastery upgrade!");
+        // PrintToChat(client, "You don't have the Elemental Mastery upgrade!");
         return Plugin_Handled;
     }
     
@@ -371,14 +435,27 @@ public Action FireDamage_Timer(Handle timer, DataPack pack)
     
     if(victim > 0 && IsClientInGame(victim) && IsPlayerAlive(victim))
     {
-        // Deal damage over time
-        SDKHooks_TakeDamage(victim, attacker, attacker, 5.0, DMG_BURN);
-        return Plugin_Continue;
+        // Check if fire damage should still continue
+        if(GetGameTime() < g_fFireDamageEndTime[victim])
+        {
+            // Deal damage over time
+            SDKHooks_TakeDamage(victim, attacker, attacker, 5.0, DMG_BURN);
+            return Plugin_Continue;
+        }
+        else
+        {
+            // Fire duration ended
+            delete pack;
+            g_hFireDamageTimer[victim] = null;
+            g_fFireDamageEndTime[victim] = 0.0;
+            return Plugin_Stop;
+        }
     }
     
     // Victim died or disconnected
     delete pack;
     g_hFireDamageTimer[victim] = null;
+    g_fFireDamageEndTime[victim] = 0.0;
     return Plugin_Stop;
 }
 
@@ -386,11 +463,18 @@ public Action ResetMovement_Timer(Handle timer, DataPack pack)
 {
     pack.Reset();
     int client = GetClientOfUserId(pack.ReadCell());
+    float originalSpeed = pack.ReadFloat();
     delete pack;
     
-    if(client > 0 && IsClientInGame(client) && IsPlayerAlive(client))
+    if(client > 0 && IsClientInGame(client))
     {
-        SetEntPropFloat(client, Prop_Send, "m_flLaggedMovementValue", 1.0);
+        if(IsPlayerAlive(client))
+        {
+            // Reset to original speed
+            SetEntPropFloat(client, Prop_Send, "m_flLaggedMovementValue", originalSpeed);
+        }
+        g_hSlowResetTimer[client] = null;
+        g_fOriginalSpeed[client] = 1.0; // Reset stored value
     }
     return Plugin_Stop;
 }
@@ -399,11 +483,18 @@ public Action ResetMovementType_Timer(Handle timer, DataPack pack)
 {
     pack.Reset();
     int client = GetClientOfUserId(pack.ReadCell());
+    MoveType originalMoveType = view_as<MoveType>(pack.ReadCell());
     delete pack;
     
-    if(client > 0 && IsClientInGame(client) && IsPlayerAlive(client))
+    if(client > 0 && IsClientInGame(client))
     {
-        SetEntityMoveType(client, MOVETYPE_WALK);
+        if(IsPlayerAlive(client))
+        {
+            // Reset to original move type (usually MOVETYPE_WALK)
+            SetEntityMoveType(client, originalMoveType);
+        }
+        g_hStunResetTimer[client] = null;
+        g_mOriginalMoveType[client] = MOVETYPE_WALK; // Reset stored value
     }
     return Plugin_Stop;
 }
@@ -417,7 +508,7 @@ public Action ElementCooldown_Timer(Handle timer, DataPack pack)
     if(client > 0 && IsClientInGame(client))
     {
         g_hElementTimer[client] = null;
-        //PrintToChat(client, "Element switch is ready!");
+        // PrintToChat(client, "Element switch is ready!");
     }
     return Plugin_Stop;
 }
