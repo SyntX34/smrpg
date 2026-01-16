@@ -11,6 +11,7 @@
 #define ICE_SLOW_DURATION 3.0
 #define EARTH_STUN_DURATION 1.5
 #define FIRE_DURATION 5.0
+#define FIRE_DAMAGE_INTERVAL 1.0
 
 enum ElementType
 {
@@ -20,6 +21,11 @@ enum ElementType
     ELEMENT_EARTH
 }
 
+int g_iClientFlags[MAXPLAYERS+1];
+#define CLIENT_HAS_UPGRADE (1 << 0)
+#define CLIENT_ELEMENT_ACTIVE (1 << 1)
+#define CLIENT_IN_COOLDOWN (1 << 2)
+
 ElementType g_iCurrentElement[MAXPLAYERS+1];
 ConVar g_hCVCooldown;
 ConVar g_hCVDamageMultiplier;
@@ -27,14 +33,10 @@ ConVar g_hCVElementSwitchTime;
 
 Handle g_hElementTimer[MAXPLAYERS+1];
 Handle g_hAutoSwitchTimer[MAXPLAYERS+1];
-Handle g_hFireDamageTimer[MAXPLAYERS+1];
-Handle g_hSlowResetTimer[MAXPLAYERS+1];
-Handle g_hStunResetTimer[MAXPLAYERS+1];
-bool g_bElementActive[MAXPLAYERS+1];
-bool g_bUpgradeLoaded = false;
-float g_fOriginalSpeed[MAXPLAYERS+1];
-MoveType g_mOriginalMoveType[MAXPLAYERS+1];
 float g_fFireDamageEndTime[MAXPLAYERS+1];
+int g_iFireAttacker[MAXPLAYERS+1];
+
+bool g_bUpgradeLoaded = false;
 
 public Plugin myinfo = 
 {
@@ -48,6 +50,10 @@ public Plugin myinfo =
 public void OnPluginStart()
 {
     LoadTranslations("smrpg_stock_upgrades.phrases");
+    
+    // Hook player death for cleanup
+    HookEvent("player_death", Event_PlayerDeath);
+    HookEvent("player_spawn", Event_PlayerSpawn);
     
     for(int i = 1; i <= MaxClients; i++)
     {
@@ -83,12 +89,14 @@ public void OnLibraryAdded(const char[] name)
         
         g_bUpgradeLoaded = true;
         
+        // Initialize existing clients
         for(int i = 1; i <= MaxClients; i++)
         {
             if(IsClientInGame(i) && SMRPG_GetClientUpgradeLevel(i, UPGRADE_SHORTNAME) > 0)
             {
+                g_iClientFlags[i] |= CLIENT_HAS_UPGRADE;
                 StartAutoElementSwitch(i);
-                g_bElementActive[i] = true;
+                g_iClientFlags[i] |= CLIENT_ELEMENT_ACTIVE;
             }
         }
     }
@@ -99,29 +107,71 @@ public void OnLibraryRemoved(const char[] name)
     if(StrEqual(name, "smrpg"))
     {
         g_bUpgradeLoaded = false;
+        
+        // Clear all flags
+        for(int i = 1; i <= MaxClients; i++)
+        {
+            g_iClientFlags[i] = 0;
+        }
     }
 }
 
 public void OnClientPutInServer(int client)
 {
+    SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
+    
+    // Reset all values
+    g_iClientFlags[client] = 0;
     g_iCurrentElement[client] = ELEMENT_FIRE;
     g_hElementTimer[client] = null;
     g_hAutoSwitchTimer[client] = null;
-    g_hFireDamageTimer[client] = null;
-    g_hSlowResetTimer[client] = null;
-    g_hStunResetTimer[client] = null;
-    g_bElementActive[client] = false;
-    g_fOriginalSpeed[client] = 1.0;
-    g_mOriginalMoveType[client] = MOVETYPE_WALK;
     g_fFireDamageEndTime[client] = 0.0;
-    
-    SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
+    g_iFireAttacker[client] = 0;
 }
 
 public void OnClientDisconnect(int client)
 {
     ClearClientTimers(client);
-    g_bElementActive[client] = false;
+    g_iClientFlags[client] = 0;
+    g_fFireDamageEndTime[client] = 0.0;
+    g_iFireAttacker[client] = 0;
+}
+
+public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast)
+{
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    
+    // Clear all effects on dead player
+    if(client > 0)
+    {
+        // Reset movement speed if slowed
+        if(GetEntPropFloat(client, Prop_Send, "m_flLaggedMovementValue") < 1.0)
+        {
+            SetEntPropFloat(client, Prop_Send, "m_flLaggedMovementValue", 1.0);
+        }
+        
+        // Reset move type if stunned
+        if(GetEntityMoveType(client) == MOVETYPE_NONE)
+        {
+            SetEntityMoveType(client, MOVETYPE_WALK);
+        }
+        
+        // Stop fire damage
+        g_fFireDamageEndTime[client] = 0.0;
+    }
+}
+
+public void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)
+{
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    
+    // Reset player state on spawn
+    if(client > 0)
+    {
+        SetEntPropFloat(client, Prop_Send, "m_flLaggedMovementValue", 1.0);
+        SetEntityMoveType(client, MOVETYPE_WALK);
+        g_fFireDamageEndTime[client] = 0.0;
+    }
 }
 
 void ClearClientTimers(int client)
@@ -136,24 +186,6 @@ void ClearClientTimers(int client)
     {
         KillTimer(g_hAutoSwitchTimer[client]);
         g_hAutoSwitchTimer[client] = null;
-    }
-    
-    if(g_hFireDamageTimer[client] != null)
-    {
-        KillTimer(g_hFireDamageTimer[client]);
-        g_hFireDamageTimer[client] = null;
-    }
-    
-    if(g_hSlowResetTimer[client] != null)
-    {
-        KillTimer(g_hSlowResetTimer[client]);
-        g_hSlowResetTimer[client] = null;
-    }
-    
-    if(g_hStunResetTimer[client] != null)
-    {
-        KillTimer(g_hStunResetTimer[client]);
-        g_hStunResetTimer[client] = null;
     }
 }
 
@@ -177,41 +209,54 @@ public void SMRPG_BuySell(int client, UpgradeQueryType type)
     if(type == UpgradeQueryType_Buy)
     {
         // Player bought the upgrade, start auto-switching
-        if(!g_bElementActive[client])
+        if(!(g_iClientFlags[client] & CLIENT_ELEMENT_ACTIVE))
         {
+            g_iClientFlags[client] |= CLIENT_HAS_UPGRADE;
             StartAutoElementSwitch(client);
-            g_bElementActive[client] = true;
+            g_iClientFlags[client] |= CLIENT_ELEMENT_ACTIVE;
         }
     }
     else if(type == UpgradeQueryType_Sell)
     {
         // Player sold the upgrade, stop all effects
         ClearClientTimers(client);
-        g_bElementActive[client] = false;
+        g_iClientFlags[client] &= ~(CLIENT_HAS_UPGRADE | CLIENT_ELEMENT_ACTIVE | CLIENT_IN_COOLDOWN);
     }
 }
 
 /**
- * Hook for damage dealt
+ * Hook for damage dealt - FIXED: Only apply to opponents
  */
 public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3])
 {
-    // Check if attacker has the upgrade
+    // CRITICAL FIX: Only apply effects when attacker damages an opponent
     if(attacker > 0 && attacker <= MaxClients && IsClientInGame(attacker))
     {
-        if(SMRPG_UpgradeExists(UPGRADE_SHORTNAME) && SMRPG_GetClientUpgradeLevel(attacker, UPGRADE_SHORTNAME) > 0)
+        // Check if victim is an opponent (different team or valid target)
+        if(victim > 0 && victim <= MaxClients && IsClientInGame(victim))
+        {
+            // Check if they're on the same team - if so, DON'T apply effects
+            if(GetClientTeam(attacker) == GetClientTeam(victim))
+                return Plugin_Continue;
+            
+            // Also check if victim is actually damaged (damage > 0)
+            if(damage <= 0)
+                return Plugin_Continue;
+        }
+        else
+        {
+            // Victim is not a valid player, don't apply effects
+            return Plugin_Continue;
+        }
+        
+        // Now check for upgrade
+        if(SMRPG_UpgradeExists(UPGRADE_SHORTNAME) && (g_iClientFlags[attacker] & CLIENT_HAS_UPGRADE))
         {
             if(SMRPG_IsUpgradeEnabled(UPGRADE_SHORTNAME) && SMRPG_RunUpgradeEffect(victim, UPGRADE_SHORTNAME, attacker))
             {
                 // Apply elemental damage multiplier
-                if(g_hCVDamageMultiplier != null)
-                {
-                    damage *= g_hCVDamageMultiplier.FloatValue;
-                }
-                else
-                {
-                    damage *= 1.5;
-                }
+                float damageMultiplier = g_hCVDamageMultiplier != null ? g_hCVDamageMultiplier.FloatValue : 1.5;
+                damage *= damageMultiplier;
                 
                 // Apply elemental effect based on current element
                 ApplyElementalEffect(victim, attacker, g_iCurrentElement[attacker]);
@@ -229,98 +274,100 @@ public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &dam
  */
 void ApplyElementalEffect(int victim, int attacker, ElementType element)
 {
+    // Make sure victim is alive and valid
+    if(victim <= 0 || victim > MaxClients || !IsClientInGame(victim) || !IsPlayerAlive(victim))
+        return;
+    
+    // Make sure attacker is valid
+    if(attacker <= 0 || attacker > MaxClients || !IsClientInGame(attacker))
+        return;
+    
+    // Don't apply effects to teammates
+    if(GetClientTeam(attacker) == GetClientTeam(victim))
+        return;
+    
     switch(element)
     {
         case ELEMENT_FIRE:
         {
             // Fire effect - damage over time for 5 seconds
-            if(IsPlayerAlive(victim))
-            {
-                // If fire is already active, just extend the duration
-                if(g_hFireDamageTimer[victim] != null)
-                {
-                    g_fFireDamageEndTime[victim] = GetGameTime() + FIRE_DURATION;
-                    // PrintToChat(attacker, "Fire duration extended on %N!", victim);
-                }
-                else
-                {
-                    // Start new fire damage
-                    g_fFireDamageEndTime[victim] = GetGameTime() + FIRE_DURATION;
-                    
-                    DataPack pack = new DataPack();
-                    pack.WriteCell(GetClientUserId(victim));
-                    pack.WriteCell(GetClientUserId(attacker));
-                    g_hFireDamageTimer[victim] = CreateTimer(1.0, FireDamage_Timer, pack, TIMER_REPEAT);
-                    // PrintToChat(attacker, "Fire damage applied to %N!", victim);
-                }
-            }
+            // Use a single global timer instead of per-victim timers
+            g_fFireDamageEndTime[victim] = GetGameTime() + FIRE_DURATION;
+            g_iFireAttacker[victim] = attacker;
+            
+            // Start fire damage processing
+            CreateTimer(FIRE_DAMAGE_INTERVAL, ProcessFireDamage, GetClientUserId(victim), TIMER_FLAG_NO_MAPCHANGE);
         }
         case ELEMENT_ICE:
         {
-            // Slow effect
-            if(IsPlayerAlive(victim))
+            // Slow effect - FIXED: No timers, just set and forget with duration check
+            float currentSpeed = GetEntPropFloat(victim, Prop_Send, "m_flLaggedMovementValue");
+            
+            // Only apply if not already slowed more than this
+            if(currentSpeed > 0.5)
             {
-                // Store original speed if we haven't already
-                if(g_hSlowResetTimer[victim] == null)
-                {
-                    g_fOriginalSpeed[victim] = GetEntPropFloat(victim, Prop_Send, "m_flLaggedMovementValue");
-                }
-                else
-                {
-                    // Already slowed, just refresh the timer
-                    KillTimer(g_hSlowResetTimer[victim]);
-                    g_hSlowResetTimer[victim] = null;
-                }
-                
-                // Apply slow
                 SetEntPropFloat(victim, Prop_Send, "m_flLaggedMovementValue", 0.5);
                 
                 // Create timer to reset movement speed
-                DataPack pack = new DataPack();
-                pack.WriteCell(GetClientUserId(victim));
-                pack.WriteFloat(g_fOriginalSpeed[victim]);
-                g_hSlowResetTimer[victim] = CreateTimer(ICE_SLOW_DURATION, ResetMovement_Timer, pack);
-                
-                // PrintToChat(attacker, "Ice slow applied to %N!", victim);
+                CreateTimer(ICE_SLOW_DURATION, ResetMovementSpeed, GetClientUserId(victim));
             }
         }
         case ELEMENT_LIGHTNING:
         {
             // Shock effect - instant extra damage (no lasting effects)
             float extraDamage = 10.0;
-            if(IsPlayerAlive(victim))
-            {
-                SDKHooks_TakeDamage(victim, attacker, attacker, extraDamage, DMG_SHOCK);
-                // PrintToChat(attacker, "Lightning shock applied to %N!", victim);
-            }
+            SDKHooks_TakeDamage(victim, attacker, attacker, extraDamage, DMG_SHOCK);
         }
         case ELEMENT_EARTH:
         {
-            if(IsPlayerAlive(victim) && GetEntityMoveType(victim) != MOVETYPE_NONE)
+            // Stun effect
+            MoveType currentMoveType = GetEntityMoveType(victim);
+            
+            // Only stun if not already stunned and not in a special movetype
+            if(currentMoveType == MOVETYPE_WALK)
             {
-                // If already stunned, don't re-stun
-                if(g_hStunResetTimer[victim] != null)
-                {
-                    // PrintToChat(attacker, "%N is already stunned!", victim);
-                    return;
-                }
-                
-                // Store original move type
-                g_mOriginalMoveType[victim] = GetEntityMoveType(victim);
-                
-                // Apply stun
                 SetEntityMoveType(victim, MOVETYPE_NONE);
                 
                 // Create timer to reset movement
-                DataPack pack = new DataPack();
-                pack.WriteCell(GetClientUserId(victim));
-                pack.WriteCell(view_as<int>(g_mOriginalMoveType[victim]));
-                g_hStunResetTimer[victim] = CreateTimer(EARTH_STUN_DURATION, ResetMovementType_Timer, pack);
-                
-                // PrintToChat(attacker, "Earth stun applied to %N!", victim);
+                CreateTimer(EARTH_STUN_DURATION, ResetMovementType, GetClientUserId(victim));
             }
         }
     }
+}
+
+/**
+ * Process fire damage
+ * Single timer per victim
+ */
+public Action ProcessFireDamage(Handle timer, int userid)
+{
+    int victim = GetClientOfUserId(userid);
+    
+    if(victim > 0 && IsClientInGame(victim) && IsPlayerAlive(victim))
+    {
+        // Check if fire damage should still continue
+        if(GetGameTime() < g_fFireDamageEndTime[victim])
+        {
+            int attacker = g_iFireAttacker[victim];
+            
+            // Make sure attacker is still valid
+            if(attacker > 0 && attacker <= MaxClients && IsClientInGame(attacker))
+            {
+                // Deal damage over time
+                SDKHooks_TakeDamage(victim, attacker, attacker, 5.0, DMG_BURN);
+                
+                // Create next fire damage tick
+                CreateTimer(FIRE_DAMAGE_INTERVAL, ProcessFireDamage, userid, TIMER_FLAG_NO_MAPCHANGE);
+                return Plugin_Stop;
+            }
+        }
+        
+        // Fire ended or attacker invalid
+        g_fFireDamageEndTime[victim] = 0.0;
+        g_iFireAttacker[victim] = 0;
+    }
+    
+    return Plugin_Stop;
 }
 
 /**
@@ -330,6 +377,8 @@ void SwitchToNextElement(int client)
 {
     g_iCurrentElement[client] = view_as<ElementType>((g_iCurrentElement[client] + 1) % 4);
     
+    // Optional: Print element switch message
+    /*
     char elementName[32];
     switch(g_iCurrentElement[client])
     {
@@ -338,8 +387,8 @@ void SwitchToNextElement(int client)
         case ELEMENT_LIGHTNING: elementName = "Lightning";
         case ELEMENT_EARTH: elementName = "Earth";
     }
-    
-    // PrintToChat(client, "Element switched to %s!", elementName);
+    PrintToChat(client, "Element switched to %s!", elementName);
+    */
 }
 
 /**
@@ -350,7 +399,7 @@ public Action Command_SwitchElement(int client, int args)
     if(!g_bUpgradeLoaded)
         return Plugin_Handled;
         
-    if(g_hElementTimer[client] != null)
+    if(g_iClientFlags[client] & CLIENT_IN_COOLDOWN)
     {
         // PrintToChat(client, "Element switch is on cooldown!");
         return Plugin_Handled;
@@ -362,7 +411,7 @@ public Action Command_SwitchElement(int client, int args)
         return Plugin_Handled;
     }
     
-    if(SMRPG_GetClientUpgradeLevel(client, UPGRADE_SHORTNAME) == 0)
+    if(!(g_iClientFlags[client] & CLIENT_HAS_UPGRADE))
     {
         // PrintToChat(client, "You don't have the Elemental Mastery upgrade!");
         return Plugin_Handled;
@@ -372,10 +421,10 @@ public Action Command_SwitchElement(int client, int args)
         return Plugin_Handled;
     
     // Start auto element switching if not already active
-    if(!g_bElementActive[client])
+    if(!(g_iClientFlags[client] & CLIENT_ELEMENT_ACTIVE))
     {
         StartAutoElementSwitch(client);
-        g_bElementActive[client] = true;
+        g_iClientFlags[client] |= CLIENT_ELEMENT_ACTIVE;
     }
     
     // Switch to next element
@@ -383,6 +432,8 @@ public Action Command_SwitchElement(int client, int args)
     
     // Set cooldown for manual switch
     float cooldown = g_hCVCooldown != null ? g_hCVCooldown.FloatValue : 30.0;
+    g_iClientFlags[client] |= CLIENT_IN_COOLDOWN;
+    
     DataPack pack = new DataPack();
     pack.WriteCell(GetClientUserId(client));
     g_hElementTimer[client] = CreateTimer(cooldown, ElementCooldown_Timer, pack);
@@ -414,7 +465,7 @@ public Action AutoSwitchElement_Timer(Handle timer, DataPack pack)
     pack.Reset();
     int client = GetClientOfUserId(pack.ReadCell());
     
-    if(client > 0 && IsClientInGame(client) && IsPlayerAlive(client) && SMRPG_GetClientUpgradeLevel(client, UPGRADE_SHORTNAME) > 0)
+    if(client > 0 && IsClientInGame(client) && IsPlayerAlive(client) && (g_iClientFlags[client] & CLIENT_HAS_UPGRADE))
     {
         // Automatically switch elements
         SwitchToNextElement(client);
@@ -427,74 +478,32 @@ public Action AutoSwitchElement_Timer(Handle timer, DataPack pack)
     return Plugin_Stop;
 }
 
-public Action FireDamage_Timer(Handle timer, DataPack pack)
+public Action ResetMovementSpeed(Handle timer, int userid)
 {
-    pack.Reset();
-    int victim = GetClientOfUserId(pack.ReadCell());
-    int attacker = GetClientOfUserId(pack.ReadCell());
-    
-    if(victim > 0 && IsClientInGame(victim) && IsPlayerAlive(victim))
-    {
-        // Check if fire damage should still continue
-        if(GetGameTime() < g_fFireDamageEndTime[victim])
-        {
-            // Deal damage over time
-            SDKHooks_TakeDamage(victim, attacker, attacker, 5.0, DMG_BURN);
-            return Plugin_Continue;
-        }
-        else
-        {
-            // Fire duration ended
-            delete pack;
-            g_hFireDamageTimer[victim] = null;
-            g_fFireDamageEndTime[victim] = 0.0;
-            return Plugin_Stop;
-        }
-    }
-    
-    // Victim died or disconnected
-    delete pack;
-    g_hFireDamageTimer[victim] = null;
-    g_fFireDamageEndTime[victim] = 0.0;
-    return Plugin_Stop;
-}
-
-public Action ResetMovement_Timer(Handle timer, DataPack pack)
-{
-    pack.Reset();
-    int client = GetClientOfUserId(pack.ReadCell());
-    float originalSpeed = pack.ReadFloat();
-    delete pack;
+    int client = GetClientOfUserId(userid);
     
     if(client > 0 && IsClientInGame(client))
     {
         if(IsPlayerAlive(client))
         {
-            // Reset to original speed
-            SetEntPropFloat(client, Prop_Send, "m_flLaggedMovementValue", originalSpeed);
+            // Reset to normal speed
+            SetEntPropFloat(client, Prop_Send, "m_flLaggedMovementValue", 1.0);
         }
-        g_hSlowResetTimer[client] = null;
-        g_fOriginalSpeed[client] = 1.0; // Reset stored value
     }
     return Plugin_Stop;
 }
 
-public Action ResetMovementType_Timer(Handle timer, DataPack pack)
+public Action ResetMovementType(Handle timer, int userid)
 {
-    pack.Reset();
-    int client = GetClientOfUserId(pack.ReadCell());
-    MoveType originalMoveType = view_as<MoveType>(pack.ReadCell());
-    delete pack;
+    int client = GetClientOfUserId(userid);
     
     if(client > 0 && IsClientInGame(client))
     {
         if(IsPlayerAlive(client))
         {
-            // Reset to original move type (usually MOVETYPE_WALK)
-            SetEntityMoveType(client, originalMoveType);
+            // Reset to normal movement (walk)
+            SetEntityMoveType(client, MOVETYPE_WALK);
         }
-        g_hStunResetTimer[client] = null;
-        g_mOriginalMoveType[client] = MOVETYPE_WALK; // Reset stored value
     }
     return Plugin_Stop;
 }
@@ -508,7 +517,57 @@ public Action ElementCooldown_Timer(Handle timer, DataPack pack)
     if(client > 0 && IsClientInGame(client))
     {
         g_hElementTimer[client] = null;
+        g_iClientFlags[client] &= ~CLIENT_IN_COOLDOWN;
         // PrintToChat(client, "Element switch is ready!");
     }
     return Plugin_Stop;
+}
+
+/**
+ * Frame-based processing for fire damage (more efficient than timers)
+ */
+public void OnGameFrame()
+{
+    static float lastFireProcessTime = 0.0;
+    float currentTime = GetGameTime();
+    
+    // Process fire damage every 0.1 seconds instead of every frame
+    if(currentTime - lastFireProcessTime < 0.1)
+        return;
+    
+    lastFireProcessTime = currentTime;
+    
+    for(int i = 1; i <= MaxClients; i++)
+    {
+        if(IsClientInGame(i) && IsPlayerAlive(i) && g_fFireDamageEndTime[i] > 0.0)
+        {
+            // Check if fire damage should still continue
+            if(currentTime < g_fFireDamageEndTime[i])
+            {
+                int attacker = g_iFireAttacker[i];
+                
+                // Make sure attacker is still valid
+                if(attacker > 0 && attacker <= MaxClients && IsClientInGame(attacker))
+                {
+                    // Check if it's time for damage tick (every 1 second)
+                    if(g_fFireDamageEndTime[i] - currentTime <= FIRE_DURATION - FIRE_DAMAGE_INTERVAL)
+                    {
+                        SDKHooks_TakeDamage(i, attacker, attacker, 5.0, DMG_BURN);
+                    }
+                }
+                else
+                {
+                    // Attacker invalid, stop fire
+                    g_fFireDamageEndTime[i] = 0.0;
+                    g_iFireAttacker[i] = 0;
+                }
+            }
+            else
+            {
+                // Fire duration ended
+                g_fFireDamageEndTime[i] = 0.0;
+                g_iFireAttacker[i] = 0;
+            }
+        }
+    }
 }

@@ -21,14 +21,9 @@ int g_iSpriteBeam;
 int g_iSpriteHalo;
 int g_iSpriteExplosion;
 
-StringMap g_hSoundMap;
-char g_sExplosionSounds[][] = {
-	"weapons/explode3.wav",
-	"weapons/explode4.wav",
-	"weapons/explode5.wav"
-};
-
+ArrayList g_hExplosionSounds;
 int g_iClientTeam[MAXPLAYERS+1];
+float g_fLastExplosionTime[MAXPLAYERS+1];
 
 public Plugin myinfo = 
 {
@@ -43,12 +38,17 @@ public void OnPluginStart()
 {
 	LoadTranslations("smrpg_stock_upgrades.phrases");
 	
-	g_hSoundMap = new StringMap();
+	g_hExplosionSounds = new ArrayList(PLATFORM_MAX_PATH);
+	
+	g_fLastExplosionTime[0] = 0.0;
 	
 	for(int i = 1; i <= MaxClients; i++)
 	{
 		if(IsClientInGame(i))
+		{
+			g_fLastExplosionTime[i] = 0.0;
 			OnClientPutInServer(i);
+		}
 	}
 }
 
@@ -57,7 +57,7 @@ public void OnPluginEnd()
 	if(SMRPG_UpgradeExists(UPGRADE_SHORTNAME))
 		SMRPG_UnregisterUpgradeType(UPGRADE_SHORTNAME);
 	
-	delete g_hSoundMap;
+	delete g_hExplosionSounds;
 }
 
 public void OnAllPluginsLoaded()
@@ -67,13 +67,19 @@ public void OnAllPluginsLoaded()
 
 public void OnMapStart()
 {
-	for(int i = 0; i < sizeof(g_sExplosionSounds); i++)
+	char sExplosionSounds[][PLATFORM_MAX_PATH] = {
+		"weapons/explode3.wav",
+		"weapons/explode4.wav",
+		"weapons/explode5.wav"
+	};
+	
+	for(int i = 0; i < sizeof(sExplosionSounds); i++)
 	{
-		PrecacheSound(g_sExplosionSounds[i], true);
-		g_hSoundMap.SetValue(g_sExplosionSounds[i], 1);
+		PrecacheSound(sExplosionSounds[i], true);
+		g_hExplosionSounds.PushString(sExplosionSounds[i]);
 		
 		char sDownloadPath[PLATFORM_MAX_PATH];
-		Format(sDownloadPath, sizeof(sDownloadPath), "sound/%s", g_sExplosionSounds[i]);
+		Format(sDownloadPath, sizeof(sDownloadPath), "sound/%s", sExplosionSounds[i]);
 		if(FileExists(sDownloadPath))
 			AddFileToDownloadsTable(sDownloadPath);
 	}
@@ -105,11 +111,13 @@ public void OnLibraryAdded(const char[] name)
 public void OnClientPutInServer(int client)
 {
 	SDKHook(client, SDKHook_OnTakeDamagePost, Hook_OnTakeDamagePost);
+	g_fLastExplosionTime[client] = 0.0;
 }
 
 public void OnClientDisconnect(int client)
 {
 	g_iClientTeam[client] = 0;
+	g_fLastExplosionTime[client] = 0.0;
 }
 
 public void OnGameFrame()
@@ -169,6 +177,10 @@ public void Hook_OnTakeDamagePost(int victim, int attacker, int inflictor, float
 	if(!IsShotgunWeapon(iWeapon))
 		return;
 	
+	float currentTime = GetGameTime();
+	if(currentTime - g_fLastExplosionTime[attacker] < 0.5)
+		return;
+	
 	float fExplosionChance = float(iLevel) * g_hCVExplosionChance.FloatValue;
 	if(GetRandomFloat(0.0, 1.0) > fExplosionChance)
 		return;
@@ -176,42 +188,28 @@ public void Hook_OnTakeDamagePost(int victim, int attacker, int inflictor, float
 	if(!SMRPG_RunUpgradeEffect(victim, UPGRADE_SHORTNAME, attacker))
 		return;
 	
+	g_fLastExplosionTime[attacker] = currentTime;
+	
 	float victimPos[3];
 	GetClientAbsOrigin(victim, victimPos);
 	victimPos[2] += 30.0;
 	
-	DataPack pack = new DataPack();
-	pack.WriteCell(GetClientUserId(victim));
-	pack.WriteCell(GetClientUserId(attacker));
-	pack.WriteCell(iLevel);
-	pack.WriteFloat(victimPos[0]);
-	pack.WriteFloat(victimPos[1]);
-	pack.WriteFloat(victimPos[2]);
-	
-	RequestFrame(CreateExplosionEffectDeferred, pack);
+	CreateExplosionEffect(victim, attacker, iLevel, victimPos);
 }
 
-void CreateExplosionEffectDeferred(DataPack pack)
+void CreateExplosionEffect(int victim, int attacker, int level, const float impactPosition[3])
 {
-	pack.Reset();
-	
-	int victim = GetClientOfUserId(pack.ReadCell());
-	int attacker = GetClientOfUserId(pack.ReadCell());
-	int level = pack.ReadCell();
-	
-	float impactPosition[3];
-	impactPosition[0] = pack.ReadFloat();
-	impactPosition[1] = pack.ReadFloat();
-	impactPosition[2] = pack.ReadFloat();
-	
-	delete pack;
-	
 	if(victim <= 0 || !IsClientInGame(victim) || !IsPlayerAlive(victim) ||
 	   attacker <= 0 || !IsClientInGame(attacker))
 		return;
 	
-	int soundIndex = GetRandomInt(0, sizeof(g_sExplosionSounds) - 1);
-	EmitSoundToAll(g_sExplosionSounds[soundIndex], SOUND_FROM_WORLD, SNDCHAN_AUTO, SNDLEVEL_NORMAL, SND_NOFLAGS, SNDVOL_NORMAL, SNDPITCH_NORMAL, -1, impactPosition);
+	char soundPath[PLATFORM_MAX_PATH];
+	int soundCount = g_hExplosionSounds.Length;
+	if(soundCount > 0)
+	{
+		g_hExplosionSounds.GetString(GetRandomInt(0, soundCount - 1), soundPath, sizeof(soundPath));
+		EmitSoundToAll(soundPath, SOUND_FROM_WORLD, SNDCHAN_AUTO, SNDLEVEL_NORMAL, SND_NOFLAGS, SNDVOL_NORMAL, SNDPITCH_NORMAL, -1, impactPosition);
+	}
 	
 	CreateVisualEffects(impactPosition, level);
 	
@@ -239,7 +237,6 @@ void ApplyExplosionDamage(int attacker, int victim, int level, const float impac
 {
 	float explosionRadius = g_hCVExplosionRadius.FloatValue;
 	float explosionDamage = g_hCVExplosionDamage.FloatValue * float(level) / 10.0;
-	
 	float explosionRadiusSquared = explosionRadius * explosionRadius;
 	
 	float victimPos[3];
