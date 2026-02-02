@@ -56,7 +56,6 @@ void RegisterTopMenuNatives()
 
 void LoadPrestigeUpgrades()
 {
-    // Clear existing cache
     for (int i = 0; i < MAXPRESTIGE; i++)
     {
         if (g_hPrestigeUpgrades[i] != null)
@@ -66,7 +65,6 @@ void LoadPrestigeUpgrades()
         }
     }
     
-    // Load the prestige config
     char sConfigPath[PLATFORM_MAX_PATH];
     BuildPath(Path_SM, sConfigPath, sizeof(sConfigPath), "configs/smrpg/prestige.cfg");
     
@@ -86,36 +84,33 @@ void LoadPrestigeUpgrades()
     
     LogMessage("[PRESTIGE] Loading prestige configuration...");
     
-    // Load each prestige level
-    if (!kv.GotoFirstSubKey(false))
-    {
-        delete kv;
-        LogError("[PRESTIGE] No prestige levels found in config!");
-        return;
-    }
-    
-    do
+    int loadedPrestigeCount = 0;
+    for (int iPrestige = 0; iPrestige < MAXPRESTIGE; iPrestige++)
     {
         char sPrestigeKey[12];
-        kv.GetSectionName(sPrestigeKey, sizeof(sPrestigeKey));
+        IntToString(iPrestige, sPrestigeKey, sizeof(sPrestigeKey));
         
-        int iPrestige = StringToInt(sPrestigeKey);
-        if (iPrestige < 0 || iPrestige >= MAXPRESTIGE)
+        if (!kv.JumpToKey(sPrestigeKey, false))
         {
-            LogError("[PRESTIGE] Invalid prestige level: %d (must be 0-%d)", iPrestige, MAXPRESTIGE-1);
             continue;
         }
         
         LogMessage("[PRESTIGE] Loading prestige level %d...", iPrestige);
         
-        // Create ArrayList for this prestige
-        g_hPrestigeUpgrades[iPrestige] = new ArrayList(sizeof(PrestigeUpgradeInfo));
+        if (g_hPrestigeUpgrades[iPrestige] == null)
+        {
+            g_hPrestigeUpgrades[iPrestige] = new ArrayList(sizeof(PrestigeUpgradeInfo));
+        }
+        else
+        {
+            g_hPrestigeUpgrades[iPrestige].Clear();
+        }
         
-        // Load upgrades for this prestige
         if (kv.JumpToKey("upgrades", false))
         {
             if (kv.GotoFirstSubKey(false))
             {
+                int upgradeCount = 0;
                 PrestigeUpgradeInfo upgradeInfo;
                 
                 do
@@ -123,16 +118,17 @@ void LoadPrestigeUpgrades()
                     char sLevelStr[12];
                     kv.GetSectionName(sLevelStr, sizeof(sLevelStr));
                     
+                    if (StringToInt(sLevelStr) == 0 && !StrEqual(sLevelStr, "0"))
+                        continue;
+                    
                     upgradeInfo.requiredLevel = StringToInt(sLevelStr);
                     
                     char sUpgradeList[256];
                     kv.GetString(NULL_STRING, sUpgradeList, sizeof(sUpgradeList));
-                    
-                    // Parse comma-separated upgrade names
                     char sUpgrades[32][MAX_UPGRADE_SHORTNAME_LENGTH];
-                    int upgradeCount = ExplodeString(sUpgradeList, ",", sUpgrades, sizeof(sUpgrades), sizeof(sUpgrades[]));
+                    int listCount = ExplodeString(sUpgradeList, ",", sUpgrades, sizeof(sUpgrades), sizeof(sUpgrades[]));
                     
-                    for (int i = 0; i < upgradeCount; i++)
+                    for (int i = 0; i < listCount; i++)
                     {
                         TrimString(sUpgrades[i]);
                         
@@ -140,6 +136,7 @@ void LoadPrestigeUpgrades()
                         {
                             strcopy(upgradeInfo.shortName, sizeof(upgradeInfo.shortName), sUpgrades[i]);
                             g_hPrestigeUpgrades[iPrestige].PushArray(upgradeInfo);
+                            upgradeCount++;
                             
                             LogMessage("[PRESTIGE] P%d: Added '%s' (unlock at level %d)", 
                                 iPrestige, upgradeInfo.shortName, upgradeInfo.requiredLevel);
@@ -148,28 +145,37 @@ void LoadPrestigeUpgrades()
                     
                 } while (kv.GotoNextKey(false));
                 
-                kv.GoBack(); // Back from subsections
+                kv.GoBack();
+                
+                LogMessage("[PRESTIGE] Prestige %d loaded with %d upgrades", iPrestige, upgradeCount);
             }
             else
             {
-                LogError("[PRESTIGE] Prestige %d has 'upgrades' section but no entries!", iPrestige);
+                LogError("[PRESTIGE] Prestige %d has 'upgrades' section but no level entries!", iPrestige);
             }
             
-            kv.GoBack(); // Back from "upgrades"
+            kv.GoBack();
         }
         else
         {
             LogError("[PRESTIGE] Prestige %d has no 'upgrades' section!", iPrestige);
         }
+        kv.Rewind();
+        kv.JumpToKey("Prestige", false);
         
-        LogMessage("[PRESTIGE] Prestige %d loaded with %d upgrades", 
-            iPrestige, g_hPrestigeUpgrades[iPrestige].Length);
-        
-        kv.GoBack(); // Back to root to check next prestige level
-        
-    } while (kv.GotoNextKey(false));
+        loadedPrestigeCount++;
+    }
     
     delete kv;
+    for (int i = 0; i < MAXPRESTIGE; i++)
+    {
+        if (g_hPrestigeUpgrades[i] != null)
+        {
+            LogMessage("[PRESTIGE DEBUG] Prestige %d has %d upgrades loaded", i, g_hPrestigeUpgrades[i].Length);
+        }
+    }
+    
+    LogMessage("[PRESTIGE] Loaded %d prestige levels", loadedPrestigeCount);
     LogMessage("[PRESTIGE] Prestige configuration loaded successfully");
 }
 
@@ -1204,52 +1210,43 @@ bool IsUpgradeAvailableForPlayer(int client, int upgradeIndex)
     {
         return false;
     }
-    int iPurchasedLevel = GetClientPurchasedUpgradeLevel(client, upgradeIndex);
-    if (iPurchasedLevel > 0)
-    {
-        return true;
-    }
+    
     int iPrestige = SMRPG_GetClientPrestigeLevel(client);
     int iLevel = SMRPG_GetClientLevel(client);
-    if (iPrestige < 0 || iPrestige >= MAXPRESTIGE)
-    {
-        return false;
-    }
+    int iPurchasedLevel = GetClientPurchasedUpgradeLevel(client, upgradeIndex);
     
     if (g_hPrestigeUpgrades[iPrestige] == null)
     {
         LoadPrestigeUpgrades();
-        
-        if (g_hPrestigeUpgrades[iPrestige] == null)
-        {
-            return true;
-        }
     }
     
-    int iSize = g_hPrestigeUpgrades[iPrestige].Length;
-    if (iSize == 0)
+    if (g_hPrestigeUpgrades[iPrestige] == null)
     {
-        return true;
+        return false;
     }
     PrestigeUpgradeInfo upgradeInfo;
-    bool foundInCurrentPrestige = false;
+    bool foundInPrestigeConfig = false;
+    int requiredLevel = -1;
     
-    for (int i = 0; i < iSize; i++)
+    for (int i = 0; i < g_hPrestigeUpgrades[iPrestige].Length; i++)
     {
         g_hPrestigeUpgrades[iPrestige].GetArray(i, upgradeInfo);
         
         if (StrEqual(upgradeInfo.shortName, upgrade.shortName, false))
         {
-            foundInCurrentPrestige = true;
-            if (iLevel >= upgradeInfo.requiredLevel)
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
+            foundInPrestigeConfig = true;
+            requiredLevel = upgradeInfo.requiredLevel;
+            break;
         }
     }
+    if (!foundInPrestigeConfig)
+    {
+        return false;
+    }
+    if (iLevel >= requiredLevel)
+    {
+        return true;
+    }
+    
     return false;
 }

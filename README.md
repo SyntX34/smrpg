@@ -105,6 +105,15 @@ See the available upgrade plugins for examples. You can use the [example upgrade
 * Speed+ - Increase your average movement speed.
 * Stealth - Renders yourself more and more invisible.
 * Vampire - Steal HP from players when damaging them.
+* Bloodritual - Sacrifice health to create a blood pool that damages enemies and heals you.
+* Timewarp - Slow down time for nearby enemies when activated.
+* ShadowStep - Teleport behind enemies to flank them.
+* Randomteleport - Teleports you away from enemies when taking damage.
+* GravityWell - Create a gravity well that attracts enemies to a point.
+* Fireball Shotgun - Fireball effect from shotguns.
+* Explode Shotgun - Exploding bullets for shotguns.
+* Elemental Mastery - Master different elemental powers to enhance your attacks.
+* Chain Lightning - Unleash chain lightning that bounces between enemies, dealing decreasing damage.
 
 # RPG Top 10 on your website
 There is an [example PHP script](https://github.com/peace-maker/smrpg/blob/master/helper_scripts/webtop10_example.php) to list the top 10 rpg players including their stats and selected levels. You might want to merge it into your website.
@@ -114,3 +123,4 @@ There is an [example PHP script](https://github.com/peace-maker/smrpg/blob/maste
 * arsirc - author of [THC:RPG](https://forums.alliedmods.net/showthread.php?t=123596). Provided the Damage+, Speed+ and Gravity- upgrade ideas and the team lock option.
 * SumGuy14 (Aka Soccerdude) - author of [RPGx](https://forums.alliedmods.net/showthread.php?t=56877). Config and visual effect ideas, using a seperate plugin to coordinate similar effects.
 * freddukes - author of [SourceRPG](http://forums.eventscripts.com/viewtopic.php?f=27&t=20789). Config ideas, turbo mode, showing menu on levelup, ...
+* SyntX - Maintainer of [SM:RPG](https://github.com/SyntX34/smrpg). Added Prestige system and fixed some bugs.

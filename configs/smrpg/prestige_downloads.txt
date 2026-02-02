@@ -1,0 +1,8 @@
+models/player/models1.mdl 
+models/player/models1.vvd
+models/player/models1.sw.vtx
+models/player/models1.dx80.vtx
+models/player/models1/dx90.vtx
+materials/models/player/models1/custommodel.vmt
+materials/models/player/models1/custommodel.vtf
+sounds/sound1.mp3
