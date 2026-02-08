@@ -1586,8 +1586,8 @@ public int Native_SetClientPrestigeLevel(Handle plugin, int numParams)
 		return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d.", client);
 	
 	int prestigeLevel = GetNativeCell(2);
-	if(prestigeLevel < 0 || prestigeLevel > 8)
-		return ThrowNativeError(SP_ERROR_NATIVE, "Invalid prestige level %d. Must be 0-8.", prestigeLevel);
+	if(prestigeLevel < 0)
+		return ThrowNativeError(SP_ERROR_NATIVE, "Invalid prestige level %d. Must be >= 0.", prestigeLevel);
 	
 	g_iPlayerInfo[client].prestigeLevel = prestigeLevel;
 	return 1;
@@ -1621,11 +1621,9 @@ public int Native_IsClientEligibleForPrestige(Handle plugin, int numParams)
     if(client < 0 || client > MaxClients)
         return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d.", client);
 
-    if(g_iPlayerInfo[client].prestigeLevel >= 8)
-        return false;
-    
     // Note: External plugin should check if player has reached required level
     // using SMRPG_GetClientPrestigeMaxLevel and SMRPG_GetClientLevel
+    // Also check max prestige limit externally
     
     return true;
 }
@@ -1660,8 +1658,8 @@ public int Native_ResetClientToPrestige(Handle plugin, int numParams)
         return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d.", client);
     
     int newPrestige = GetNativeCell(2);
-    if(newPrestige < 1 || newPrestige > 8)
-        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid prestige level %d. Must be 1-8.", newPrestige);
+    if(newPrestige < 1)
+        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid prestige level %d. Must be >= 1.", newPrestige);
     
     // Call forward to let other plugins know
     Action result;

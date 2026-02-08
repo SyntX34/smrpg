@@ -2,7 +2,7 @@
 #include <sourcemod>
 #include <topmenus>
 
-#define MAXPRESTIGE 10
+#define MAXPRESTIGE 12
 
 TopMenu g_hRPGTopMenu;
 

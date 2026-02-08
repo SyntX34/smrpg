@@ -51,21 +51,25 @@ char g_sColorPalette[][] = {
 };
 
 // Prestige configuration
-#define MAX_PRESTIGE 8
+#define MAX_PRESTIGE 12
 #define CONFIG_PATH "configs/smrpg/prestige.cfg"
 KeyValues g_kvPrestigeConfig;
 
 // Special colors for prestige levels
 char g_sPrestigeColors[][] = {
 	"FFFFFF",  // Prestige 0: White
-	"4CAF50",  // Prestige 1: Green
-	"2196F3",  // Prestige 2: Blue
-	"FF9800",  // Prestige 3: Orange
-	"9C27B0",  // Prestige 4: Purple
-	"F44336",  // Prestige 5: Red
-	"00BCD4",  // Prestige 6: Cyan
-	"FFEB3B",  // Prestige 7: Yellow
-	"FF4081"   // Prestige 8: Pink
+    "4CAF50",  // Prestige 1: Green
+    "00FFFF",  // Prestige 2: Cyan
+    "FFCCCB",  // Prestige 3: LightRed
+    "FFEB3B",  // Prestige 4: Yellow
+    "9ACD32",  // Prestige 5: YellowGreen
+    "B0E0E6",  // Prestige 6: PBlue
+    "0000FF",  // Prestige 7: Blue
+    "F44336",  // Prestige 8: Red
+    "9C27B0",  // Prestige 9: Purple
+    "FF4081",   // Prestige 10: Pink
+	"607D8B",  // Prestige 11: Blue Grey
+	"E91E63"   // Prestige 12: Pink (Magenta)
 };
 
 public Plugin myinfo =

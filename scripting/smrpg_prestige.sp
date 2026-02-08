@@ -32,8 +32,6 @@
 
 #pragma newdecls required
 
-#define MAX_PRESTIGE 12
-#define MAX_UPGRADE_SLOTS 10
 #define CONFIG_PATH "configs/smrpg/prestige.cfg"
 #define DOWNLOADS_PATH "configs/smrpg/prestige_downloads.txt"
 
@@ -41,8 +39,6 @@
 #define PMP PLATFORM_MAX_PATH
 
 ConVar g_cvPrestigeEnabled;
-ConVar g_cvPrestigeRequiredLevel;
-ConVar g_cvPrestigeMaxLevel;
 ConVar g_cvPrestigeDebug;
 ConVar g_cvPrestigeSounds;
 ConVar g_cvPrestigeModels;
@@ -70,9 +66,18 @@ enum struct PrestigeModel
 	int team; // 0 = CT, 1 = T, 2 = Both
 }
 
-ArrayList g_hUpgradeRestrictions[MAX_PRESTIGE + 1];
-ArrayList g_hPrestigeSounds[MAX_PRESTIGE + 1];
-ArrayList g_hPrestigeModels[MAX_PRESTIGE + 1];
+enum struct PrestigeInfo
+{
+	char name[64];
+	int max_level;
+	float xp_multiplier;
+	float credit_multiplier;
+}
+
+PrestigeInfo g_PrestigeInfo[32];
+ArrayList g_hUpgradeRestrictions[32];
+ArrayList g_hPrestigeSounds[32];
+ArrayList g_hPrestigeModels[32];
 
 bool g_bPrestigeDeclined[MPS];
 float g_fClientXPMultiplier[MPS];
@@ -92,6 +97,8 @@ CategoryId g_category_prestige_humans = INVALID_CATEGORY;
 bool g_bShopLoaded = false;
 bool g_bZRAvailable = false;
 bool g_bZRiotAvailable = false;
+
+int g_iMaxPrestige = 0;
 
 public Plugin myinfo = 
 {
@@ -117,20 +124,11 @@ public void OnPluginStart()
 	RegAdminCmd("sm_setprestige", Command_SetPrestige, ADMFLAG_ROOT, "Set a player's prestige level");
 	
 	g_cvPrestigeEnabled = CreateConVar("smrpg_prestige_enabled", "1", "Enable prestige system", FCVAR_NOTIFY);
-	g_cvPrestigeRequiredLevel = CreateConVar("smrpg_prestige_required_level", "1500", "Level required to prestige", FCVAR_NOTIFY);
-	g_cvPrestigeMaxLevel = CreateConVar("smrpg_prestige_max_level", "1500", "Max level for each prestige", FCVAR_NOTIFY);
 	g_cvPrestigeDebug = CreateConVar("smrpg_prestige_debug", "0", "Enable debug messages", FCVAR_NOTIFY);
 	g_cvPrestigeSounds = CreateConVar("smrpg_prestige_sounds", "1", "Enable prestige sounds", FCVAR_NOTIFY);
 	g_cvPrestigeModels = CreateConVar("smrpg_prestige_models", "1", "Enable prestige models", FCVAR_NOTIFY);
 	g_cvDiscordEnable = CreateConVar("smrpg_prestige_discord", "1", "Enable Discord logging", FCVAR_NOTIFY);
 	g_cvDiscordWebhook = CreateConVar("smrpg_prestige_discord_webhook", "", "Discord webhook URL for prestige logging", FCVAR_PROTECTED);
-	
-	for(int i = 0; i <= MAX_PRESTIGE; i++)
-	{
-		g_hUpgradeRestrictions[i] = new ArrayList(sizeof(UpgradeRestriction));
-		g_hPrestigeSounds[i] = new ArrayList(sizeof(PrestigeSound));
-		g_hPrestigeModels[i] = new ArrayList(sizeof(PrestigeModel));
-	}
 	
 	g_hCookieDisableMessages = RegClientCookie("prestige_disable_messages", "Disable prestige messages", CookieAccess_Private);
 	g_hCookieDisableMenuPopup = RegClientCookie("prestige_disable_menu_popup", "Disable prestige menu popup", CookieAccess_Private);
@@ -144,6 +142,8 @@ public void OnPluginStart()
 	AutoExecConfig(true, "smrpg_prestige");
 	
 	HookEvent("player_spawn", Event_PlayerSpawn);
+	HookEvent("player_death", OnClientDeath);
+	HookEvent("round_end", OnRoundEnd);
 	
 	#if defined _zr_included
 	HookEvent("player_team", Event_PlayerTeam);
@@ -182,7 +182,7 @@ public void OnPluginEnd()
 		delete g_kvPrestigeConfig;
 	}
 	
-	for(int i = 0; i <= MAX_PRESTIGE; i++)
+	for(int i = 0; i <= g_iMaxPrestige; i++)
 	{
 		delete g_hUpgradeRestrictions[i];
 		delete g_hPrestigeSounds[i];
@@ -227,6 +227,56 @@ public void OnClientDisconnect(int client)
 	g_bPrestigeDeclined[client] = false;
 	g_sClientEquippedModel[client][0] = '\0';
 	g_iClientEquippedPrestige[client] = -1;
+}
+
+public void OnRoundEnd(Event event, const char[] name, bool dontBroadcast)
+{
+	if(!g_cvPrestigeEnabled.BoolValue)
+		return;
+	
+	int winner = event.GetInt("winner");
+	
+	if(winner < 2)
+		return;
+	
+	#if defined _shop_included
+	if(!g_bShopLoaded)
+		return;
+	#endif
+	for(int client = 1; client <= MaxClients; client++)
+	{
+		if(IsClientInGame(client) && !IsFakeClient(client) && GetClientTeam(client) == winner)
+		{
+			int baseCredits = 2;
+			
+			#if defined _shop_included
+			if(g_bShopLoaded)
+			{
+				AwardShopCredits(client, baseCredits);
+			}
+			#endif
+		}
+	}
+}
+
+public void OnClientDeath(Event event, const char[] name, bool dontBroadcast)
+{
+	if(!g_cvPrestigeEnabled.BoolValue)
+		return;
+	
+	int victim = GetClientOfUserId(event.GetInt("userid"));
+	int attacker = GetClientOfUserId(event.GetInt("attacker"));
+	
+	if(!attacker || attacker == victim || !IsClientInGame(attacker))
+		return;
+	int baseCredits = 1;
+	
+	#if defined _shop_included
+	if(g_bShopLoaded)
+	{
+		AwardShopCredits(attacker, baseCredits);
+	}
+	#endif
 }
 
 #if defined _shop_included
@@ -302,7 +352,7 @@ bool RegisterShopCategories()
 public bool OnShouldDisplayCategory(int client, CategoryId category_id, char[] category, ShopMenu menu)
 {
 	int prestigeLevel = SMRPG_GetClientPrestigeLevel(client);
-	return (prestigeLevel > 0);
+	return (prestigeLevel >= 0);
 }
 
 public Action Timer_DelayedPopulation(Handle timer)
@@ -339,7 +389,7 @@ void PopulateShopModels()
 		return;
 	}
 	
-	for(int prestige = 1; prestige <= MAX_PRESTIGE; prestige++)
+	for(int prestige = 1; prestige <= g_iMaxPrestige; prestige++)
 	{
 		for(int i = 0; i < g_hPrestigeModels[prestige].Length; i++)
 		{
@@ -382,15 +432,11 @@ public ShopAction OnShopModelSelected(int client, CategoryId category_id, const 
 		int requiredPrestige = Shop_GetItemCustomInfo(item_id, "prestige");
 		int clientPrestige = SMRPG_GetClientPrestigeLevel(client);
 		
-		if(clientPrestige != requiredPrestige)
+		if(clientPrestige < requiredPrestige)
 		{
-			if(clientPrestige < requiredPrestige)
-				CPrintToChat(client, "{green}[Shop]{default} This model requires {green}Prestige %d{default}. You are currently {green}Prestige %d{default}.", requiredPrestige, clientPrestige);
-			else
-				CPrintToChat(client, "{green}[Shop]{default} This model is from {green}Prestige %d{default}. You are now {green}Prestige %d{default} and cannot use old models.", requiredPrestige, clientPrestige);
+			CPrintToChat(client, "{green}[Shop]{default} This model requires {green}Prestige %d{default}. You are currently {green}Prestige %d{default}.", requiredPrestige, clientPrestige);
 			return Shop_UseOff;
 		}
-		
 		char modelPath[PMP];
 		Shop_GetItemCustomInfoString(item_id, "model", modelPath, sizeof(modelPath));
 		
@@ -467,52 +513,13 @@ void RemoveOldPrestigeSkins(int client)
 	
 	int clientPrestige = SMRPG_GetClientPrestigeLevel(client);
 	
-	CategoryId categories[2];
-	categories[0] = g_category_prestige_zombies;
-	categories[1] = g_category_prestige_humans;
-	
-	for(int cat = 0; cat < 2; cat++)
-	{
-		CategoryId category_id = categories[cat];
-		if(category_id == INVALID_CATEGORY)
-			continue;
-		
-		for(int prestige = 1; prestige < clientPrestige; prestige++)
-		{
-			for(int i = 0; i < g_hPrestigeModels[prestige].Length; i++)
-			{
-				PrestigeModel model;
-				g_hPrestigeModels[prestige].GetArray(i, model);
-				if(category_id == g_category_prestige_zombies && model.team != 1 && model.team != 2)
-					continue;
-				if(category_id == g_category_prestige_humans && model.team != 0 && model.team != 2)
-					continue;
-				
-				char itemUnique[256];
-				Format(itemUnique, sizeof(itemUnique), "prestige_%d_%s_%d", prestige, model.name, i);
-				
-				ItemId item_id = Shop_GetItemId(category_id, itemUnique);
-				if(item_id != INVALID_ITEM)
-				{
-					if(Shop_IsClientHasItem(client, item_id))
-					{
-						Shop_RemoveClientItem(client, item_id, 0);
-						
-						if(g_cvPrestigeDebug.BoolValue)
-							LogMessage("[Prestige Debug] Removed old prestige %d item '%s' from %N", prestige, itemUnique, client);
-					}
-				}
-			}
-		}
-	}
-	
-	if(g_iClientEquippedPrestige[client] < clientPrestige)
+	if(g_iClientEquippedPrestige[client] > clientPrestige)
 	{
 		g_sClientEquippedModel[client][0] = '\0';
 		g_iClientEquippedPrestige[client] = -1;
 		
 		if(!g_bDisableMessages[client])
-			CPrintToChat(client, "{green}[Prestige]{default} Your old prestige model has been removed.");
+			CPrintToChat(client, "{green}[Prestige]{default} Your equipped model has been unequipped as it requires a higher prestige level.");
 	}
 }
 #endif
@@ -531,16 +538,93 @@ void LoadPrestigeConfig()
 		return;
 	}
 	
+	g_iMaxPrestige = FindMaxPrestigeLevel();
+	
+	for(int i = 0; i <= g_iMaxPrestige; i++)
+	{
+		g_hUpgradeRestrictions[i] = new ArrayList(sizeof(UpgradeRestriction));
+		g_hPrestigeSounds[i] = new ArrayList(sizeof(PrestigeSound));
+		g_hPrestigeModels[i] = new ArrayList(sizeof(PrestigeModel));
+		
+		strcopy(g_PrestigeInfo[i].name, sizeof(g_PrestigeInfo[].name), "");
+		g_PrestigeInfo[i].max_level = 1750;
+		g_PrestigeInfo[i].xp_multiplier = 1.0;
+		g_PrestigeInfo[i].credit_multiplier = 1.0;
+	}
+	
+	ParsePrestigeConfig();
 	ParseUpgradeRestrictions();
 	ParsePrestigeSounds();
 	ParsePrestigeModels();
 	
-	LogMessage("Loaded prestige configuration from %s", configPath);
+	LogMessage("Loaded prestige configuration from %s, Max Prestige: %d", configPath, g_iMaxPrestige);
+}
+
+int FindMaxPrestigeLevel()
+{
+	int maxLevel = 0;
+	
+	KeyValues kv = new KeyValues("Prestige");
+	
+	char configPath[PMP];
+	BuildPath(Path_SM, configPath, sizeof(configPath), CONFIG_PATH);
+	
+	if(!kv.ImportFromFile(configPath))
+	{
+		delete kv;
+		return 0;
+	}
+	
+	if(kv.GotoFirstSubKey(false))
+	{
+		do
+		{
+			char sectionName[32];
+			kv.GetSectionName(sectionName, sizeof(sectionName));
+			
+			int prestigeLevel = StringToInt(sectionName);
+			if(prestigeLevel > maxLevel)
+			{
+				maxLevel = prestigeLevel;
+			}
+		}
+		while(kv.GotoNextKey(false));
+	}
+	
+	delete kv;
+	return maxLevel;
+}
+
+void ParsePrestigeConfig()
+{
+	for(int prestige = 0; prestige <= g_iMaxPrestige; prestige++)
+	{
+		char prestigeKey[4];
+		IntToString(prestige, prestigeKey, sizeof(prestigeKey));
+		
+		g_kvPrestigeConfig.Rewind();
+		if(g_kvPrestigeConfig.JumpToKey(prestigeKey))
+		{
+			g_kvPrestigeConfig.GetString("name", g_PrestigeInfo[prestige].name, sizeof(g_PrestigeInfo[].name), "Unknown");
+			g_PrestigeInfo[prestige].max_level = g_kvPrestigeConfig.GetNum("max_level", 1750);
+			g_PrestigeInfo[prestige].xp_multiplier = g_kvPrestigeConfig.GetFloat("xp_multiplier", 1.0);
+			g_PrestigeInfo[prestige].credit_multiplier = g_kvPrestigeConfig.GetFloat("credit_multiplier", 1.0);
+			
+			if(g_cvPrestigeDebug.BoolValue)
+			{
+				LogMessage("[Prestige Debug] Loaded prestige %d: %s, max_level: %d, xp_mult: %.2f, credit_mult: %.2f", 
+					prestige, g_PrestigeInfo[prestige].name, g_PrestigeInfo[prestige].max_level, 
+					g_PrestigeInfo[prestige].xp_multiplier, g_PrestigeInfo[prestige].credit_multiplier);
+			}
+			
+			g_kvPrestigeConfig.GoBack();
+		}
+	}
 }
 
 void ParseUpgradeRestrictions()
 {
-    for(int prestige = 0; prestige <= MAX_PRESTIGE; prestige++)
+    for(int prestige = 0; prestige <= g_iMaxPrestige; prestige++)
     {
         char prestigeKey[4];
         IntToString(prestige, prestigeKey, sizeof(prestigeKey));
@@ -560,10 +644,10 @@ void ParseUpgradeRestrictions()
                         g_kvPrestigeConfig.GetSectionName(levelKey, sizeof(levelKey));
                         int minLevel = StringToInt(levelKey);
                         
-                        char upgradeList[256];
+                        char upgradeList[512];
                         g_kvPrestigeConfig.GetString(NULL_STRING, upgradeList, sizeof(upgradeList));
                         
-                        char upgrades[32][32];
+                        char upgrades[32][64];
                         int upgradeCount = ExplodeString(upgradeList, ",", upgrades, sizeof(upgrades), sizeof(upgrades[]));
                         
                         for(int i = 0; i < upgradeCount; i++)
@@ -590,7 +674,7 @@ void ParseUpgradeRestrictions()
 
 void ParsePrestigeSounds()
 {
-	for(int prestige = 0; prestige <= MAX_PRESTIGE; prestige++)
+	for(int prestige = 0; prestige <= g_iMaxPrestige; prestige++)
 	{
 		char prestigeKey[4];
 		IntToString(prestige, prestigeKey, sizeof(prestigeKey));
@@ -633,7 +717,7 @@ void ParsePrestigeSounds()
 
 void ParsePrestigeModels()
 {
-	for(int prestige = 0; prestige <= MAX_PRESTIGE; prestige++)
+	for(int prestige = 0; prestige <= g_iMaxPrestige; prestige++)
 	{
 		char prestigeKey[4];
 		IntToString(prestige, prestigeKey, sizeof(prestigeKey));
@@ -761,7 +845,7 @@ void ApplyPrestigeConfig(int client)
 	g_kvPrestigeConfig.Rewind();
 	if(g_kvPrestigeConfig.JumpToKey(prestigeKey))
 	{
-		int maxLevel = g_kvPrestigeConfig.GetNum("max_level", g_cvPrestigeMaxLevel.IntValue);
+		int maxLevel = g_kvPrestigeConfig.GetNum("max_level", 1750);
 		SMRPG_SetClientPrestigeMaxLevel(client, maxLevel);
 		
 		float xpMultiplier = g_kvPrestigeConfig.GetFloat("xp_multiplier", 1.0);
@@ -800,15 +884,27 @@ public void OnClientLevel(int client, int oldlevel, int newlevel)
 	if(!g_cvPrestigeEnabled.BoolValue)
 		return;
 		
-	int requiredLevel = g_cvPrestigeRequiredLevel.IntValue;
+	int requiredLevel = g_PrestigeInfo[SMRPG_GetClientPrestigeLevel(client)].max_level;
 	int prestigeLevel = SMRPG_GetClientPrestigeLevel(client);
 	
 	if(g_cvPrestigeSounds.BoolValue && newlevel > oldlevel)
 	{
 		PlayPrestigeSound(client, prestigeLevel);
 	}
+	if(newlevel > oldlevel)
+	{
+		int baseCredits = 1;
+		int levelsGained = newlevel - oldlevel;
+		
+		#if defined _shop_included
+		if(g_bShopLoaded)
+		{
+			AwardShopCredits(client, baseCredits * levelsGained);
+		}
+		#endif
+	}
 	
-	if(newlevel >= requiredLevel && oldlevel < requiredLevel && prestigeLevel < MAX_PRESTIGE && !g_bPrestigeDeclined[client])
+	if(newlevel >= requiredLevel && oldlevel < requiredLevel && prestigeLevel < g_iMaxPrestige && !g_bPrestigeDeclined[client])
 	{
 		if(!g_bDisableMenuPopup[client])
 		{
@@ -817,6 +913,14 @@ public void OnClientLevel(int client, int oldlevel, int newlevel)
 		else if(!g_bDisableMessages[client])
 		{
 			CPrintToChat(client, "{green}[Prestige]{default} You are eligible to prestige! Type {lightgreen}!prestige{default} to view details.");
+		}
+		
+		if(!g_bDisableMessages[client] && g_cvPrestigeDebug.BoolValue)
+		{
+			char clientName[MAX_NAME_LENGTH];
+			GetClientName(client, clientName, sizeof(clientName));
+			CPrintToChatAll("{green}[Prestige]{default} {lightgreen}%s{default} has reached level %d and can now prestige to {lightgreen}%s{default}!", 
+				clientName, requiredLevel, g_PrestigeInfo[prestigeLevel + 1].name);
 		}
 	}
 }
@@ -833,10 +937,10 @@ void PlayPrestigeSound(int client, int prestigeLevel)
 	
 	if(sound.path[0] != '\0')
 	{
-		EmitSoundToClient(client, sound.path);
+		EmitSoundToAll(sound.path);
 		
 		if(g_cvPrestigeDebug.BoolValue)
-			LogMessage("[Prestige Debug] Played sound to %N: %s", client, sound.path);
+			LogMessage("[Prestige Debug] Played prestige sound to all players: %s (triggered by %N)", sound.path, client);
 	}
 }
 
@@ -844,42 +948,76 @@ void ShowPrestigeOffer(int client)
 {
 	Menu menu = new Menu(MenuHandler_PrestigeOffer);
 	
-	char title[256];
+	char title[512];
 	int currentPrestige = SMRPG_GetClientPrestigeLevel(client);
 	int nextPrestige = currentPrestige + 1;
+	int requiredLevel = g_PrestigeInfo[currentPrestige].max_level;
 	
-	Format(title, sizeof(title), "Prestige Opportunity!\n \nYou've reached level %d!\n \nCurrent: Prestige %d\nNext: Prestige %d\n \nBenefits of Prestige %d:", 
-		g_cvPrestigeRequiredLevel.IntValue, currentPrestige, nextPrestige, nextPrestige);
-	menu.SetTitle(title);
+	char newUpgrade[64];
+	GetNewUpgradeForPrestige(nextPrestige, newUpgrade, sizeof(newUpgrade));
 	
-	char prestigeKey[4];
-	IntToString(nextPrestige, prestigeKey, sizeof(prestigeKey));
-	
-	char buffer[128];
-	g_kvPrestigeConfig.Rewind();
-	if(g_kvPrestigeConfig.JumpToKey(prestigeKey))
+	char modelName[64];
+	if(g_hPrestigeModels[nextPrestige].Length > 0)
 	{
-		float xpMultiplier = g_kvPrestigeConfig.GetFloat("xp_multiplier", 1.0);
-		Format(buffer, sizeof(buffer), "• XP Rate: %.0f%%", xpMultiplier * 100);
-		menu.AddItem("", buffer, ITEMDRAW_DISABLED);
-		
-		float creditMultiplier = g_kvPrestigeConfig.GetFloat("credit_multiplier", 1.0);
-		Format(buffer, sizeof(buffer), "• Credit Bonus: +%.0f%%", (creditMultiplier - 1.0) * 100);
-		menu.AddItem("", buffer, ITEMDRAW_DISABLED);
-		
-		Format(buffer, sizeof(buffer), "• New upgrades unlocked");
-		menu.AddItem("", buffer, ITEMDRAW_DISABLED);
-		
-		if(g_cvPrestigeModels.BoolValue && g_hPrestigeModels[nextPrestige].Length > 0)
-		{
-			Format(buffer, sizeof(buffer), "• %d new models available", g_hPrestigeModels[nextPrestige].Length);
-			menu.AddItem("", buffer, ITEMDRAW_DISABLED);
-		}
-		
-		g_kvPrestigeConfig.GoBack();
+		PrestigeModel model;
+		g_hPrestigeModels[nextPrestige].GetArray(0, model);
+		strcopy(modelName, sizeof(modelName), model.name);
+	}
+	else
+	{
+		modelName[0] = '\0';
 	}
 	
-	Format(buffer, sizeof(buffer), "\nNote: Prestiging will reset you to level 1");
+	Format(title, sizeof(title), "Prestige Opportunity!\n \nYou've reached level %d!\n \nCurrent: %s\nNext: %s\n \nAre you ready to prestige?:", 
+		requiredLevel, 
+		g_PrestigeInfo[currentPrestige].name, 
+		g_PrestigeInfo[nextPrestige].name);
+	
+	menu.SetTitle(title);
+	
+	char buffer[256];
+	float xpMultiplier = g_PrestigeInfo[nextPrestige].xp_multiplier;
+	float creditMult = g_PrestigeInfo[nextPrestige].credit_multiplier;
+	
+	Format(buffer, sizeof(buffer), "• XP Multiplier: +%.0f%%", (xpMultiplier - 1.0) * 100);
+	menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+	
+	Format(buffer, sizeof(buffer), "• Shop Credit Multiplier: +%.0f%%", (creditMult - 1.0) * 100);
+	menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+	
+	if(strlen(newUpgrade) > 0)
+	{
+		Format(buffer, sizeof(buffer), "• New RPG Upgrade: %s", newUpgrade);
+		menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+	}
+	
+	if(g_cvPrestigeModels.BoolValue && g_hPrestigeModels[nextPrestige].Length > 0)
+	{
+		char accessInfo[32];
+		#if defined _shop_included
+		if(g_bShopLoaded)
+		{
+			Format(accessInfo, sizeof(accessInfo), "(Available in !shop)");
+		}
+		else
+		#endif
+		{
+			Format(accessInfo, sizeof(accessInfo), "(Available in !prestigemodels)");
+		}
+		
+		if(strlen(modelName) > 0)
+		{
+			Format(buffer, sizeof(buffer), "• New Model: %s %s", modelName, accessInfo);
+			menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+		}
+		else
+		{
+			Format(buffer, sizeof(buffer), "• New Models: %d %s", g_hPrestigeModels[nextPrestige].Length, accessInfo);
+			menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+		}
+	}
+	
+	Format(buffer, sizeof(buffer), "\nNote: Prestige will reset all RPG Upgrades.");
 	menu.AddItem("", buffer, ITEMDRAW_DISABLED);
 	menu.AddItem("", "", ITEMDRAW_SPACER);
 	
@@ -891,6 +1029,93 @@ void ShowPrestigeOffer(int client)
 	menu.Display(client, 30);
 }
 
+void GetNewUpgradeForPrestige(int prestige, char[] buffer, int maxlen)
+{
+	buffer[0] = '\0';
+	
+	char prestigeKey[4];
+	IntToString(prestige, prestigeKey, sizeof(prestigeKey));
+	
+	g_kvPrestigeConfig.Rewind();
+	if(g_kvPrestigeConfig.JumpToKey(prestigeKey))
+	{
+		if(g_kvPrestigeConfig.JumpToKey("upgrades"))
+		{
+			if(g_kvPrestigeConfig.GotoFirstSubKey(false))
+			{
+				char levelKey[32];
+				g_kvPrestigeConfig.GetSectionName(levelKey, sizeof(levelKey));
+				
+				char upgradeList[512];
+				g_kvPrestigeConfig.GetString(NULL_STRING, upgradeList, sizeof(upgradeList));
+				
+				char upgrades[32][64];
+				int upgradeCount = ExplodeString(upgradeList, ",", upgrades, sizeof(upgrades), sizeof(upgrades[]));
+				
+				if(prestige > 0)
+				{
+					ArrayList prevUpgrades = new ArrayList(64);
+					char prevPrestigeKey[4];
+					IntToString(prestige-1, prevPrestigeKey, sizeof(prevPrestigeKey));
+					
+					g_kvPrestigeConfig.Rewind();
+					if(g_kvPrestigeConfig.JumpToKey(prevPrestigeKey) && g_kvPrestigeConfig.JumpToKey("upgrades"))
+					{
+						if(g_kvPrestigeConfig.GotoFirstSubKey(false))
+						{
+							char prevUpgradeList[512];
+							g_kvPrestigeConfig.GetString(NULL_STRING, prevUpgradeList, sizeof(prevUpgradeList));
+							
+							char prevUpgradeArray[32][64];
+							int prevCount = ExplodeString(prevUpgradeList, ",", prevUpgradeArray, sizeof(prevUpgradeArray), sizeof(prevUpgradeArray[]));
+							
+							for(int i = 0; i < prevCount; i++)
+							{
+								TrimString(prevUpgradeArray[i]);
+								prevUpgrades.PushString(prevUpgradeArray[i]);
+							}
+							
+							g_kvPrestigeConfig.GoBack();
+						}
+						g_kvPrestigeConfig.GoBack();
+					}
+					
+					for(int i = 0; i < upgradeCount; i++)
+					{
+						TrimString(upgrades[i]);
+						if(strlen(upgrades[i]) > 0)
+						{
+							bool found = false;
+							for(int j = 0; j < prevUpgrades.Length; j++)
+							{
+								char prevUpgrade[64];
+								prevUpgrades.GetString(j, prevUpgrade, sizeof(prevUpgrade));
+								if(StrEqual(upgrades[i], prevUpgrade, false))
+								{
+									found = true;
+									break;
+								}
+							}
+							
+							if(!found)
+							{
+								strcopy(buffer, maxlen, upgrades[i]);
+								break;
+							}
+						}
+					}
+					
+					delete prevUpgrades;
+				}
+				else if(upgradeCount > 0)
+				{
+					strcopy(buffer, maxlen, upgrades[0]);
+				}
+			}
+		}
+	}
+}
+
 public int MenuHandler_PrestigeOffer(Menu menu, MenuAction action, int client, int param2)
 {
 	if(action == MenuAction_Select)
@@ -900,7 +1125,7 @@ public int MenuHandler_PrestigeOffer(Menu menu, MenuAction action, int client, i
 		
 		if(StrEqual(info, "yes"))
 		{
-			PerformPrestige(client);
+			ShowPrestigeConfirmation(client);
 		}
 		else if(StrEqual(info, "no"))
 		{
@@ -919,110 +1144,211 @@ public int MenuHandler_PrestigeOffer(Menu menu, MenuAction action, int client, i
 	return 0;
 }
 
-void HandlePrestigeDecline(int client)
+void ShowPrestigeConfirmation(int client)
 {
-	g_bPrestigeDeclined[client] = true;
-	
-	int currentPrestige = SMRPG_GetClientPrestigeLevel(client);
-	int nextPrestige = currentPrestige + 1;
-	
-	if(!g_bDisableMessages[client])
+    Menu menu = new Menu(MenuHandler_PrestigeConfirmation);
+    
+    int currentPrestige = SMRPG_GetClientPrestigeLevel(client);
+    int nextPrestige = currentPrestige + 1;
+    
+    char title[512];
+    Format(title, sizeof(title), "Confirm Prestige\n \nPrestige will:\n• Reset all RPG Upgrades\n• Send you back to RPG Level 1\n• Progress Prestige\n \nYou Will gain:");
+    menu.SetTitle(title);
+    
+    char buffer[256];
+    
+    float xpMult = g_PrestigeInfo[nextPrestige].xp_multiplier;
+    float creditMult = g_PrestigeInfo[nextPrestige].credit_multiplier;
+    
+    float xpBonus = (xpMult - 1.0) * 100;
+    Format(buffer, sizeof(buffer), "• XP Multiplier: +%.0f%%", xpBonus);
+    menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+    
+    Format(buffer, sizeof(buffer), "• Shop Credit Multiplier: +%.0f%%", (creditMult - 1.0) * 100);
+    menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+    
+    char newUpgrade[64];
+    GetNewUpgradeForPrestige(nextPrestige, newUpgrade, sizeof(newUpgrade));
+    if(strlen(newUpgrade) > 0)
+    {
+        Format(buffer, sizeof(buffer), "• New Upgrade: %s", newUpgrade);
+        menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+    }
+    
+    if(g_hPrestigeModels[nextPrestige].Length > 0)
+    {
+        Format(buffer, sizeof(buffer), "• New Models: %d", g_hPrestigeModels[nextPrestige].Length);
+        menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+        
+        int modelsToShow = g_hPrestigeModels[nextPrestige].Length;
+        if(modelsToShow > 3) modelsToShow = 3;
+        
+        for(int i = 0; i < modelsToShow; i++)
+        {
+            PrestigeModel model;
+            g_hPrestigeModels[nextPrestige].GetArray(i, model);
+            
+            char teamName[16];
+            if(model.team == 0) Format(teamName, sizeof(teamName), "CT");
+            else if(model.team == 1) Format(teamName, sizeof(teamName), "T");
+            else Format(teamName, sizeof(teamName), "Both");
+            
+            char modelDisplay[48];
+            if(strlen(model.name) > 15)
+            {
+                strcopy(modelDisplay, sizeof(modelDisplay), model.name);
+                modelDisplay[15] = '\0';
+                Format(modelDisplay, sizeof(modelDisplay), "%s...", modelDisplay);
+            }
+            else
+            {
+                strcopy(modelDisplay, sizeof(modelDisplay), model.name);
+            }
+            
+            Format(buffer, sizeof(buffer), "  - %s (%s)", modelDisplay, teamName);
+            menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+        }
+        
+        if(g_hPrestigeModels[nextPrestige].Length > 3)
+        {
+            Format(buffer, sizeof(buffer), "  - ... and %d more", g_hPrestigeModels[nextPrestige].Length - 3);
+            menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+        }
+    }
+    
+    menu.AddItem("", "", ITEMDRAW_SPACER);
+    
+    menu.AddItem("yes", "Yes, I'm ready to prestige!");
+    menu.AddItem("no", "No, take me back");
+    
+    menu.ExitButton = false;
+    menu.Display(client, 30);
+}
+
+public int MenuHandler_PrestigeConfirmation(Menu menu, MenuAction action, int client, int param2)
+{
+	if(action == MenuAction_Select)
 	{
-		CPrintToChat(client, "{green}[Prestige]{default} You have chosen to stay at {green}Prestige %d{default}.", currentPrestige);
-		CPrintToChat(client, "{green}[Prestige]{default} You can continue leveling up, but you will not receive benefits from Prestige %d.", nextPrestige);
-		CPrintToChat(client, "{green}[Prestige]{default} Type {lightgreen}!prestige{default} at any time to prestige.");
+		char info[32];
+		menu.GetItem(param2, info, sizeof(info));
 		
-		char prestigeKey[4];
-		IntToString(nextPrestige, prestigeKey, sizeof(prestigeKey));
-		
-		g_kvPrestigeConfig.Rewind();
-		if(g_kvPrestigeConfig.JumpToKey(prestigeKey))
+		if(StrEqual(info, "yes"))
 		{
-			float xpMultiplier = g_kvPrestigeConfig.GetFloat("xp_multiplier", 1.0);
-			float creditMultiplier = g_kvPrestigeConfig.GetFloat("credit_multiplier", 1.0);
-			
-			CPrintToChat(client, "{green}[Prestige]{default} You're missing: {lightgreen}%.0f%% XP{default} and {lightgreen}+%.0f%% credits{default}", 
-				xpMultiplier * 100, (creditMultiplier - 1.0) * 100);
+			PerformPrestige(client);
+		}
+		else if(StrEqual(info, "no"))
+		{
+			ShowPrestigeOffer(client);
 		}
 	}
+	else if(action == MenuAction_End)
+	{
+		delete menu;
+	}
+	
+	return 0;
+}
+
+void HandlePrestigeDecline(int client)
+{
+    g_bPrestigeDeclined[client] = true;
+    
+    int currentPrestige = SMRPG_GetClientPrestigeLevel(client);
+    int nextPrestige = currentPrestige + 1;
+    
+    if(!g_bDisableMessages[client])
+    {
+        CPrintToChat(client, "{green}[Prestige]{default} You have chosen to stay at {green}%s{default}.", g_PrestigeInfo[currentPrestige].name);
+        CPrintToChat(client, "{green}[Prestige]{default} You can continue leveling up, but you will not receive benefits from %s.", g_PrestigeInfo[nextPrestige].name);
+        CPrintToChat(client, "{green}[Prestige]{default} Type {lightgreen}!prestige{default} at any time to prestige.");
+        
+        float xpMult = g_PrestigeInfo[nextPrestige].xp_multiplier;
+        float creditMult = g_PrestigeInfo[nextPrestige].credit_multiplier;
+        
+        float xpBonus = (xpMult - 1.0) * 100;
+        float creditBonus = (creditMult - 1.0) * 100;
+        
+        CPrintToChat(client, "{green}[Prestige]{default} You're missing: {lightgreen}+%.0f%% XP{default} and {lightgreen}+%.0f%% credits{default}", 
+            xpBonus, creditBonus);
+    }
 }
 
 void ShowPrestigeInfo(int client)
 {
-	Menu menu = new Menu(MenuHandler_PrestigeInfo);
-	
-	char title[256];
-	int nextPrestige = SMRPG_GetClientPrestigeLevel(client) + 1;
-	
-	Format(title, sizeof(title), "Prestige Information\n \nPrestige Level %d Benefits:\n", nextPrestige);
-	menu.SetTitle(title);
-	
-	char buffer[256];
-	char prestigeKey[4];
-	IntToString(nextPrestige, prestigeKey, sizeof(prestigeKey));
-	
-	g_kvPrestigeConfig.Rewind();
-	if(g_kvPrestigeConfig.JumpToKey(prestigeKey))
-	{
-		float xpMultiplier = g_kvPrestigeConfig.GetFloat("xp_multiplier", 1.0);
-		Format(buffer, sizeof(buffer), "XP Rate: %.0f%%", xpMultiplier * 100);
-		menu.AddItem("", buffer, ITEMDRAW_DISABLED);
-		
-		float creditMultiplier = g_kvPrestigeConfig.GetFloat("credit_multiplier", 1.0);
-		Format(buffer, sizeof(buffer), "Credit Bonus: +%.0f%%", (creditMultiplier - 1.0) * 100);
-		menu.AddItem("", buffer, ITEMDRAW_DISABLED);
-		
-		int maxLevel = g_kvPrestigeConfig.GetNum("max_level", 1500);
-		Format(buffer, sizeof(buffer), "Max Level: %d", maxLevel);
-		menu.AddItem("", buffer, ITEMDRAW_DISABLED);
-		
-		if(g_hPrestigeModels[nextPrestige].Length > 0)
-		{
-			Format(buffer, sizeof(buffer), "Models Available: %d", g_hPrestigeModels[nextPrestige].Length);
-			menu.AddItem("", buffer, ITEMDRAW_DISABLED);
-		}
-		
-		if(g_kvPrestigeConfig.JumpToKey("upgrades"))
-		{
-			if(g_kvPrestigeConfig.GotoFirstSubKey(false))
-			{
-				char levelKey[32];
-				g_kvPrestigeConfig.GetSectionName(levelKey, sizeof(levelKey));
-				
-				char upgradeList[256];
-				g_kvPrestigeConfig.GetString(NULL_STRING, upgradeList, sizeof(upgradeList));
-				
-				char upgrades[32][32];
-				int upgradeCount = ExplodeString(upgradeList, ",", upgrades, sizeof(upgrades), sizeof(upgrades[]));
-				
-				if(upgradeCount > 0)
-				{
-					Format(buffer, sizeof(buffer), "Unlocks at Lvl %s: %s", levelKey, upgrades[0]);
-					
-					if(upgradeCount > 1)
-					{
-						Format(buffer, sizeof(buffer), "%s, %s", buffer, upgrades[1]);
-					}
-					if(upgradeCount > 2)
-					{
-						Format(buffer, sizeof(buffer), "%s, ...", buffer);
-					}
-					
-					menu.AddItem("", buffer, ITEMDRAW_DISABLED);
-				}
-				
-				g_kvPrestigeConfig.GoBack();
-			}
-			
-			g_kvPrestigeConfig.GoBack();
-		}
-	}
-	
-	menu.AddItem("", "", ITEMDRAW_SPACER);
-	menu.AddItem("back", "Back to Prestige Offer");
-	menu.AddItem("prestige", "Prestige Now!");
-	
-	menu.Display(client, 30);
+    Menu menu = new Menu(MenuHandler_PrestigeInfo);
+    
+    char title[256];
+    int nextPrestige = SMRPG_GetClientPrestigeLevel(client) + 1;
+    
+    Format(title, sizeof(title), "Prestige Information\n \n%s Benefits:\n", g_PrestigeInfo[nextPrestige].name);
+    menu.SetTitle(title);
+    
+    char buffer[256];
+    
+    float xpMultiplier = g_PrestigeInfo[nextPrestige].xp_multiplier;
+    float xpBonus = (xpMultiplier - 1.0) * 100;
+    Format(buffer, sizeof(buffer), "XP Multiplier: +%.0f%%", xpBonus);
+    menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+    
+    float creditMultiplier = g_PrestigeInfo[nextPrestige].credit_multiplier;
+    Format(buffer, sizeof(buffer), "Shop Credit Multiplier: +%.0f%%", (creditMultiplier - 1.0) * 100);
+    menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+    
+    char newUpgrade[64];
+    GetNewUpgradeForPrestige(nextPrestige, newUpgrade, sizeof(newUpgrade));
+    if(strlen(newUpgrade) > 0)
+    {
+        Format(buffer, sizeof(buffer), "New Upgrade: %s", newUpgrade);
+        menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+    }
+    
+    if(g_hPrestigeModels[nextPrestige].Length > 0)
+    {
+        Format(buffer, sizeof(buffer), "New Models: %d", g_hPrestigeModels[nextPrestige].Length);
+        menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+        
+        #if defined _shop_included
+        if(g_bShopLoaded)
+        {
+            Format(buffer, sizeof(buffer), "  (Access via !shop menu)");
+        }
+        else
+        #endif
+        {
+            Format(buffer, sizeof(buffer), "  (Access via !prestigemodels)");
+        }
+        menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+        for(int i = 0; i < g_hPrestigeModels[nextPrestige].Length; i++)
+        {
+            PrestigeModel model;
+            g_hPrestigeModels[nextPrestige].GetArray(i, model);
+            
+            char teamName[16];
+            if(model.team == 0) Format(teamName, sizeof(teamName), "CT");
+            else if(model.team == 1) Format(teamName, sizeof(teamName), "T");
+            else Format(teamName, sizeof(teamName), "Both");
+            char modelDisplay[64];
+            if(strlen(model.name) > 20)
+            {
+                strcopy(modelDisplay, sizeof(modelDisplay), model.name);
+                modelDisplay[20] = '\0';
+                Format(modelDisplay, sizeof(modelDisplay), "%s...", modelDisplay);
+            }
+            else
+            {
+                strcopy(modelDisplay, sizeof(modelDisplay), model.name);
+            }
+            
+            Format(buffer, sizeof(buffer), "  • %s (%s)", modelDisplay, teamName);
+            menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+        }
+    }
+    
+    menu.AddItem("", "", ITEMDRAW_SPACER);
+    menu.AddItem("back", "Back to Prestige Offer");
+    menu.AddItem("prestige", "Prestige Now!");
+    
+    menu.Display(client, 30);
 }
 
 public int MenuHandler_PrestigeInfo(Menu menu, MenuAction action, int client, int param2)
@@ -1038,7 +1364,7 @@ public int MenuHandler_PrestigeInfo(Menu menu, MenuAction action, int client, in
 		}
 		else if(StrEqual(info, "prestige"))
 		{
-			PerformPrestige(client);
+			ShowPrestigeConfirmation(client);
 		}
 	}
 	else if(action == MenuAction_End)
@@ -1054,32 +1380,30 @@ void PerformPrestige(int client)
 	int currentPrestige = SMRPG_GetClientPrestigeLevel(client);
 	int newPrestige = currentPrestige + 1;
 	
-	if(newPrestige > MAX_PRESTIGE)
+	if(newPrestige > g_iMaxPrestige)
 	{
 		CPrintToChat(client, "{green}[Prestige]{default} You've already reached the maximum prestige level!");
 		return;
 	}
 	
+	int playerLevelBefore = SMRPG_GetClientLevel(client);
+	int playerXPBefore = SMRPG_GetClientExperience(client);
+	
 	if(SMRPG_ResetClientToPrestige(client, newPrestige))
 	{
 		g_bPrestigeDeclined[client] = false;
 		
-		#if defined _shop_included
-		if(g_bShopLoaded)
-			RemoveOldPrestigeSkins(client);
-		#endif
-		
-		if(g_iClientEquippedPrestige[client] >= 0 && g_iClientEquippedPrestige[client] < newPrestige)
+		if(g_iClientEquippedPrestige[client] > newPrestige)
 		{
 			g_sClientEquippedModel[client][0] = '\0';
 			g_iClientEquippedPrestige[client] = -1;
 			
 			if(!g_bDisableMessages[client])
-				CPrintToChat(client, "{green}[Prestige]{default} Your previous prestige model has been unequipped.");
+				CPrintToChat(client, "{green}[Prestige]{default} Your equipped model has been unequipped as it requires a higher prestige level.");
 		}
 		
 		ApplyPrestigeConfig(client);
-		SendPrestigeToDiscord(client, currentPrestige, newPrestige);
+		SendPrestigeToDiscord(client, currentPrestige, newPrestige, playerLevelBefore, playerXPBefore);
 		
 		if(g_cvPrestigeSounds.BoolValue && g_hPrestigeSounds[newPrestige].Length > 0)
 		{
@@ -1089,23 +1413,52 @@ void PerformPrestige(int client)
 			
 			if(sound.path[0] != '\0')
 			{
-				EmitSoundToClient(client, sound.path);
+				EmitSoundToAll(sound.path);
 				
 				if(g_cvPrestigeDebug.BoolValue)
 					LogMessage("[Prestige Debug] Played prestige up sound to %N: %s", client, sound.path);
 			}
 		}
 		
+		char clientName[MAX_NAME_LENGTH];
+		GetClientName(client, clientName, sizeof(clientName));
+	
+		CPrintToChatAll("{green}[Prestige]{default} {lightgreen}%s{default} has achieved {lightgreen}%s{default}!", 
+			clientName, g_PrestigeInfo[newPrestige].name);
+		char centerMessage[128];
+		Format(centerMessage, sizeof(centerMessage), "%s\nhas achieved\n%s!", clientName, g_PrestigeInfo[newPrestige].name);
+		
+		for(int i = 1; i <= MaxClients; i++)
+		{
+			if(IsClientInGame(i) && !IsFakeClient(i))
+			{
+				PrintCenterText(i, centerMessage);
+				DataPack pack = new DataPack();
+				pack.WriteCell(GetClientUserId(i));
+				pack.WriteString(centerMessage);
+				CreateTimer(1.0, Timer_CenterText, pack, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+			}
+		}
+		
 		if(!g_bDisableMessages[client])
 		{
-			CPrintToChat(client, "{green}[Prestige]{default} Congratulations! You are now {green}Prestige %d{default}!", newPrestige);
+			CPrintToChat(client, "{green}[Prestige]{default} Congratulations! You are now {green}%s{default}!", g_PrestigeInfo[newPrestige].name);
 			CPrintToChat(client, "{green}[Prestige]{default} Your stats have been reset. New journey begins!");
+
+			float xpMult = g_PrestigeInfo[newPrestige].xp_multiplier;
+			float creditMult = g_PrestigeInfo[newPrestige].credit_multiplier;
 			
-			if(g_cvPrestigeModels.BoolValue && g_hPrestigeModels[newPrestige].Length > 0)
+			CPrintToChat(client, "{green}[Prestige]{default} You gained: {lightgreen}+%.0f%% XP{default} and {lightgreen}+%.0f%% Shop Credits{default}", 
+				(xpMult - 1.0) * 100, (creditMult - 1.0) * 100);
+			
+			#if defined _shop_included
+			if(g_bShopLoaded && g_cvPrestigeModels.BoolValue)
 			{
-				CPrintToChat(client, "{green}[Prestige]{default} You've unlocked {green}%d new models{default}! Type {lightgreen}!prestigemodels{default} to equip them.", 
-					g_hPrestigeModels[newPrestige].Length);
+				CPrintToChat(client, "{green}[Prestige]{default} You've unlocked {green}new models{default} from Prestige %d!", newPrestige);
+				CPrintToChat(client, "{green}[Prestige]{default} You keep all models from previous prestiges!");
+				CPrintToChat(client, "{green}[Prestige]{default} You can equip them in the {lightgreen}!shop{default} menu.");
 			}
+			#endif
 		}
 		
 		UpdateUpgradeVisibility(client);
@@ -1114,6 +1467,41 @@ void PerformPrestige(int client)
 	{
 		CPrintToChat(client, "{green}[Prestige]{default} Prestige failed. Please try again.");
 	}
+}
+
+public Action Timer_CenterText(Handle timer, DataPack pack)
+{
+	static int count[MAXPLAYERS+1] = {0, ...};
+	
+	pack.Reset();
+	int userid = pack.ReadCell();
+	char message[128];
+	pack.ReadString(message, sizeof(message));
+	
+	int client = GetClientOfUserId(userid);
+	
+	if(client > 0 && IsClientInGame(client) && !IsFakeClient(client))
+	{
+		count[client]++;
+		
+		if(count[client] <= 5)
+		{
+			PrintCenterText(client, message);
+			return Plugin_Continue;
+		}
+		else
+		{
+			count[client] = 0;
+			PrintCenterText(client, "");
+		}
+	}
+	else
+	{
+		count[client] = 0;
+	}
+	
+	delete pack;
+	return Plugin_Stop;
 }
 
 public Action Command_Prestige(int client, int args)
@@ -1138,17 +1526,16 @@ void ShowPrestigeMainMenu(int client)
 	
 	int prestigeLevel = SMRPG_GetClientPrestigeLevel(client);
 	int currentLevel = SMRPG_GetClientLevel(client);
-	int maxLevel = SMRPG_GetClientPrestigeMaxLevel(client);
-	int requiredLevel = g_cvPrestigeRequiredLevel.IntValue;
+	int maxLevel = g_PrestigeInfo[prestigeLevel].max_level;
 	
 	char title[256];
-	Format(title, sizeof(title), "Prestige Menu\n \nPrestige: %d/%d | Level: %d/%d\n ", 
-		prestigeLevel, MAX_PRESTIGE, currentLevel, maxLevel);
+	Format(title, sizeof(title), "Prestige Menu\n \n%s (%d/%d)\nLevel: %d/%d\n ", 
+		g_PrestigeInfo[prestigeLevel].name, prestigeLevel, g_iMaxPrestige, currentLevel, maxLevel);
 	menu.SetTitle(title);
 	
 	menu.AddItem("details", "View Details");
 	
-	if(currentLevel >= requiredLevel && prestigeLevel < MAX_PRESTIGE)
+	if(currentLevel >= maxLevel && prestigeLevel < g_iMaxPrestige)
 	{
 		menu.AddItem("prestige", "Prestige Now!");
 	}
@@ -1170,6 +1557,7 @@ void ShowPrestigeMainMenu(int client)
 	menu.AddItem("settings", "Settings");
 	
 	menu.ExitButton = true;
+	menu.ExitBackButton = false;
 	menu.Display(client, MENU_TIME_FOREVER);
 }
 
@@ -1211,62 +1599,76 @@ public int MenuHandler_PrestigeMain(Menu menu, MenuAction action, int client, in
 
 void ShowNextLevelInfo(int client)
 {
-	int currentPrestige = SMRPG_GetClientPrestigeLevel(client);
-	int nextPrestige = currentPrestige + 1;
-	
-	if(nextPrestige > MAX_PRESTIGE)
-	{
-		CPrintToChat(client, "{green}[Prestige]{default} You are at maximum prestige!");
-		ShowPrestigeMainMenu(client);
-		return;
-	}
-	
-	Menu menu = new Menu(MenuHandler_NextLevel);
-	
-	char title[256];
-	Format(title, sizeof(title), "Next Prestige Level (%d)\n ", nextPrestige);
-	menu.SetTitle(title);
-	
-	char buffer[128];
-	char prestigeKey[4];
-	IntToString(nextPrestige, prestigeKey, sizeof(prestigeKey));
-	
-	g_kvPrestigeConfig.Rewind();
-	if(g_kvPrestigeConfig.JumpToKey(prestigeKey))
-	{
-		char name[64];
-		g_kvPrestigeConfig.GetString("name", name, sizeof(name), "Unknown");
-		Format(buffer, sizeof(buffer), "Name: %s", name);
-		menu.AddItem("", buffer, ITEMDRAW_DISABLED);
-		
-		int requiredLevel = g_cvPrestigeRequiredLevel.IntValue;
-		Format(buffer, sizeof(buffer), "Required Level: %d", requiredLevel);
-		menu.AddItem("", buffer, ITEMDRAW_DISABLED);
-		
-		float xpMultiplier = g_kvPrestigeConfig.GetFloat("xp_multiplier", 1.0);
-		Format(buffer, sizeof(buffer), "XP Multiplier: %.0f%%", xpMultiplier * 100);
-		menu.AddItem("", buffer, ITEMDRAW_DISABLED);
-		
-		float creditMultiplier = g_kvPrestigeConfig.GetFloat("credit_multiplier", 1.0);
-		Format(buffer, sizeof(buffer), "Credit Multiplier: +%.0f%%", (creditMultiplier - 1.0) * 100);
-		menu.AddItem("", buffer, ITEMDRAW_DISABLED);
-		
-		int maxLevel = g_kvPrestigeConfig.GetNum("max_level", 1500);
-		Format(buffer, sizeof(buffer), "Max Level: %d", maxLevel);
-		menu.AddItem("", buffer, ITEMDRAW_DISABLED);
-		
-		if(g_hPrestigeModels[nextPrestige].Length > 0)
-		{
-			Format(buffer, sizeof(buffer), "New Models: %d", g_hPrestigeModels[nextPrestige].Length);
-			menu.AddItem("", buffer, ITEMDRAW_DISABLED);
-		}
-	}
-	
-	menu.AddItem("", "", ITEMDRAW_SPACER);
-	menu.AddItem("back", "Back");
-	
-	menu.ExitButton = true;
-	menu.Display(client, MENU_TIME_FOREVER);
+    int currentPrestige = SMRPG_GetClientPrestigeLevel(client);
+    int nextPrestige = currentPrestige + 1;
+    
+    if(nextPrestige > g_iMaxPrestige)
+    {
+        CPrintToChat(client, "{green}[Prestige]{default} You are at maximum prestige!");
+        ShowPrestigeMainMenu(client);
+        return;
+    }
+    
+    Menu menu = new Menu(MenuHandler_NextLevel);
+    
+    char title[256];
+    Format(title, sizeof(title), "Next Prestige: %s (%d)\n ", g_PrestigeInfo[nextPrestige].name, nextPrestige);
+    menu.SetTitle(title);
+    
+    char buffer[256];
+    
+    char newUpgrade[64];
+    GetNewUpgradeForPrestige(nextPrestige, newUpgrade, sizeof(newUpgrade));
+    float xpMultiplier = g_PrestigeInfo[nextPrestige].xp_multiplier;
+    float xpBonus = (xpMultiplier - 1.0) * 100;
+    Format(buffer, sizeof(buffer), "XP Multiplier: +%.0f%%", xpBonus);
+    menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+    
+    float creditMultiplier = g_PrestigeInfo[nextPrestige].credit_multiplier;
+    Format(buffer, sizeof(buffer), "Shop Credit Multiplier: +%.0f%%", (creditMultiplier - 1.0) * 100);
+    menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+    
+    if(strlen(newUpgrade) > 0)
+    {
+        Format(buffer, sizeof(buffer), "New Upgrade: %s", newUpgrade);
+        menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+    }
+    if(g_hPrestigeModels[nextPrestige].Length > 0)
+    {
+        Format(buffer, sizeof(buffer), "New Models: %d", g_hPrestigeModels[nextPrestige].Length);
+        menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+        for(int i = 0; i < g_hPrestigeModels[nextPrestige].Length; i++)
+        {
+            PrestigeModel model;
+            g_hPrestigeModels[nextPrestige].GetArray(i, model);
+            
+            char teamName[16];
+            if(model.team == 0) Format(teamName, sizeof(teamName), "CT");
+            else if(model.team == 1) Format(teamName, sizeof(teamName), "T");
+            else Format(teamName, sizeof(teamName), "Both");
+            char modelDisplay[64];
+            if(strlen(model.name) > 20)
+            {
+                strcopy(modelDisplay, sizeof(modelDisplay), model.name);
+                modelDisplay[20] = '\0';
+                Format(modelDisplay, sizeof(modelDisplay), "%s...", modelDisplay);
+            }
+            else
+            {
+                strcopy(modelDisplay, sizeof(modelDisplay), model.name);
+            }
+            
+            Format(buffer, sizeof(buffer), "  • %s (%s)", modelDisplay, teamName);
+            menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+        }
+    }
+    
+    menu.AddItem("", "", ITEMDRAW_SPACER);
+    menu.AddItem("back", "Back to Main Menu");
+    
+    menu.ExitButton = true;
+    menu.ExitBackButton = true;
+    menu.Display(client, MENU_TIME_FOREVER);
 }
 
 public int MenuHandler_NextLevel(Menu menu, MenuAction action, int client, int param2)
@@ -1280,6 +1682,10 @@ public int MenuHandler_NextLevel(Menu menu, MenuAction action, int client, int p
 		{
 			ShowPrestigeMainMenu(client);
 		}
+	}
+	else if(action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
+	{
+		ShowPrestigeMainMenu(client);
 	}
 	else if(action == MenuAction_End)
 	{
@@ -1302,10 +1708,8 @@ void ShowPrestigeSettings(int client)
 	Format(buffer, sizeof(buffer), "Disable Menu Popup: %s", g_bDisableMenuPopup[client] ? "Yes" : "No");
 	menu.AddItem("popup", buffer);
 	
-	menu.AddItem("", "", ITEMDRAW_SPACER);
-	menu.AddItem("back", "Back");
-	
 	menu.ExitButton = true;
+	menu.ExitBackButton = true;
 	menu.Display(client, MENU_TIME_FOREVER);
 }
 
@@ -1338,10 +1742,10 @@ public int MenuHandler_PrestigeSettings(Menu menu, MenuAction action, int client
 			CPrintToChat(client, "{green}[Prestige]{default} Menu popup %s.", g_bDisableMenuPopup[client] ? "disabled" : "enabled");
 			ShowPrestigeSettings(client);
 		}
-		else if(StrEqual(info, "back"))
-		{
-			ShowPrestigeMainMenu(client);
-		}
+	}
+	else if(action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
+	{
+		ShowPrestigeMainMenu(client);
 	}
 	else if(action == MenuAction_End)
 	{
@@ -1365,7 +1769,7 @@ void ShowPrestigeStatus(int client)
 {
 	int prestigeLevel = SMRPG_GetClientPrestigeLevel(client);
 	int currentLevel = SMRPG_GetClientLevel(client);
-	int maxLevel = SMRPG_GetClientPrestigeMaxLevel(client);
+	int maxLevel = g_PrestigeInfo[prestigeLevel].max_level;
 	
 	Panel panel = new Panel();
 	
@@ -1378,40 +1782,45 @@ void ShowPrestigeStatus(int client)
 	Format(buffer, sizeof(buffer), "Current Level: %d", currentLevel);
 	panel.DrawText(buffer);
 	
-	Format(buffer, sizeof(buffer), "Prestige Level: %d/%d", prestigeLevel, MAX_PRESTIGE);
+	Format(buffer, sizeof(buffer), "Prestige: %s (%d/%d)", g_PrestigeInfo[prestigeLevel].name, prestigeLevel, g_iMaxPrestige);
 	panel.DrawText(buffer);
 	
-	char prestigeKey[4];
-	IntToString(prestigeLevel, prestigeKey, sizeof(prestigeKey));
+	Format(buffer, sizeof(buffer), "Required Level: %d", maxLevel);
+	panel.DrawText(buffer);
 	
-	g_kvPrestigeConfig.Rewind();
-	if(g_kvPrestigeConfig.JumpToKey(prestigeKey))
+	float xpMult = g_PrestigeInfo[prestigeLevel].xp_multiplier;
+	float creditMult = g_PrestigeInfo[prestigeLevel].credit_multiplier;
+	
+	if(prestigeLevel == 0)
 	{
-		char name[64];
-		g_kvPrestigeConfig.GetString("name", name, sizeof(name), "Unknown");
-		Format(buffer, sizeof(buffer), "Prestige Name: %s", name);
+		Format(buffer, sizeof(buffer), "XP Multiplier: +0%%");
+		panel.DrawText(buffer);
+		
+		Format(buffer, sizeof(buffer), "Shop Credit Multiplier: +0%%");
+		panel.DrawText(buffer);
+	}
+	else
+	{
+		Format(buffer, sizeof(buffer), "XP Multiplier: +%.0f%%", (xpMult - 1.0) * 100);
+		panel.DrawText(buffer);
+		
+		Format(buffer, sizeof(buffer), "Shop Credit Multiplier: +%.0f%%", (creditMult - 1.0) * 100);
 		panel.DrawText(buffer);
 	}
 	
 	panel.DrawText(" ");
 	
-	if(prestigeLevel < MAX_PRESTIGE)
+	if(prestigeLevel < g_iMaxPrestige)
 	{
-		if(maxLevel > 0)
+		int progress = currentLevel * 100 / maxLevel;
+		Format(buffer, sizeof(buffer), "Progress to next prestige: %d%% (%d/%d)", progress, currentLevel, maxLevel);
+		panel.DrawText(buffer);
+		
+		if(currentLevel >= maxLevel)
 		{
-			Format(buffer, sizeof(buffer), "Next Prestige at: Level %d", maxLevel);
-			panel.DrawText(buffer);
-			
-			int progress = currentLevel * 100 / maxLevel;
-			Format(buffer, sizeof(buffer), "Progress: %d%% (%d/%d)", progress, currentLevel, maxLevel);
-			panel.DrawText(buffer);
-			
-			if(currentLevel >= maxLevel)
-			{
-				panel.DrawText(" ");
-				panel.DrawText("You can prestige now!");
-				panel.DrawText("Type !prestige to begin");
-			}
+			panel.DrawText(" ");
+			panel.DrawText("You can prestige now!");
+			panel.DrawText("Type !prestige to begin");
 		}
 	}
 	else
@@ -1422,7 +1831,8 @@ void ShowPrestigeStatus(int client)
 	}
 	
 	panel.DrawText(" ");
-	panel.DrawItem("Close");
+	panel.DrawItem("Back", ITEMDRAW_DEFAULT);
+	panel.DrawItem("Close", ITEMDRAW_DEFAULT);
 	
 	panel.Send(client, MenuHandler_PrestigeStatus, 30);
 	delete panel;
@@ -1430,6 +1840,18 @@ void ShowPrestigeStatus(int client)
 
 public int MenuHandler_PrestigeStatus(Menu menu, MenuAction action, int client, int param2)
 {
+	if(action == MenuAction_Select)
+	{
+		if(param2 == 1)
+		{
+			ShowPrestigeMainMenu(client);
+		}
+	}
+	else if(action == MenuAction_End)
+	{
+		delete menu;
+	}
+	
 	return 0;
 }
 
@@ -1471,6 +1893,7 @@ void ShowPrestigeModelsMenu(int client)
 	#endif
 	
 	menu.ExitButton = true;
+	menu.ExitBackButton = true;
 	menu.Display(client, MENU_TIME_FOREVER);
 }
 
@@ -1489,6 +1912,10 @@ public int MenuHandler_PrestigeModels(Menu menu, MenuAction action, int client, 
 		{
 			ShowModelList(client, 0);
 		}
+	}
+	else if(action == MenuAction_Cancel && param2 == MenuCancel_ExitBack)
+	{
+		ShowPrestigeMainMenu(client);
 	}
 	else if(action == MenuAction_End)
 	{
@@ -1541,16 +1968,25 @@ void ShowModelList(int client, int team)
 				
 				char itemData[256];
 				Format(itemData, sizeof(itemData), "%d;%s", prestige, model.path);
+				menu.AddItem(itemData, itemText);
 				
-				if(prestige <= clientPrestige)
-				{
-					menu.AddItem(itemData, itemText);
-				}
-				else
-				{
-					Format(itemText, sizeof(itemText), "%s [Prestige %d Required]", model.name, prestige);
-					menu.AddItem("", itemText, ITEMDRAW_DISABLED);
-				}
+				foundAny = true;
+			}
+		}
+	}
+	
+	for(int prestige = clientPrestige + 1; prestige <= g_iMaxPrestige; prestige++)
+	{
+		for(int i = 0; i < g_hPrestigeModels[prestige].Length; i++)
+		{
+			PrestigeModel model;
+			g_hPrestigeModels[prestige].GetArray(i, model);
+			
+			if(model.team == team || model.team == 2)
+			{
+				char itemText[128];
+				Format(itemText, sizeof(itemText), "%s [Prestige %d Required]", model.name, prestige);
+				menu.AddItem("", itemText, ITEMDRAW_DISABLED);
 				
 				foundAny = true;
 			}
@@ -1672,9 +2108,9 @@ public Action Command_SetPrestige(int client, int args)
 		
 	int level = StringToInt(arg2);
 	
-	if(level < 0 || level > MAX_PRESTIGE)
+	if(level < 0 || level > g_iMaxPrestige)
 	{
-		ReplyToCommand(client, "Invalid prestige level. Must be 0-%d.", MAX_PRESTIGE);
+		ReplyToCommand(client, "Invalid prestige level. Must be 0-%d.", g_iMaxPrestige);
 		return Plugin_Handled;
 	}
 	
@@ -1688,6 +2124,28 @@ public Action Command_SetPrestige(int client, int args)
 	
 	ApplyPrestigeConfig(target);
 	UpdateUpgradeVisibility(target);
+	
+	char adminName[MAX_NAME_LENGTH], targetName[MAX_NAME_LENGTH];
+	GetClientName(client, adminName, sizeof(adminName));
+	GetClientName(target, targetName, sizeof(targetName));
+	
+	CPrintToChatAll("{green}[Prestige]{default} {lightgreen}%s{default} has been set to {lightgreen}%s{default} (Prestige %d) by {lightgreen}%s{default}!", 
+		targetName, g_PrestigeInfo[level].name, level, adminName);
+	
+	char centerMessage[128];
+	Format(centerMessage, sizeof(centerMessage), "%s\nhas been set to\n%s!", targetName, g_PrestigeInfo[level].name);
+	
+	for(int i = 1; i <= MaxClients; i++)
+	{
+		if(IsClientInGame(i) && !IsFakeClient(i))
+		{
+			PrintCenterText(i, centerMessage);
+			DataPack pack = new DataPack();
+			pack.WriteCell(GetClientUserId(i));
+			pack.WriteString(centerMessage);
+			CreateTimer(1.0, Timer_CenterText, pack, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+		}
+	}
 	
 	ReplyToCommand(client, "Set %N's prestige to level %d.", target, level);
 	CPrintToChat(target, "{green}[Prestige]{default} Your prestige level has been set to {green}%d{default} by an admin.", level);
@@ -1735,6 +2193,29 @@ public Action Timer_ApplyModel(Handle timer, any userid)
 	
 	return Plugin_Continue;
 }
+
+#if defined _shop_included
+void AwardShopCredits(int client, int baseCredits)
+{
+	if(!g_bShopLoaded)
+		return;
+	
+	int prestigeLevel = SMRPG_GetClientPrestigeLevel(client);
+	float creditMultiplier = g_PrestigeInfo[prestigeLevel].credit_multiplier;
+	int finalCredits = RoundFloat(float(baseCredits) * creditMultiplier);
+	
+	if(finalCredits > 0)
+	{
+		Shop_GiveClientCredits(client, finalCredits);
+		
+		if(g_cvPrestigeDebug.BoolValue)
+		{
+			LogMessage("[Prestige Debug] Awarded %d shop credits to %N (multiplier: %.2fx)", 
+				finalCredits, client, creditMultiplier);
+		}
+	}
+}
+#endif
 
 void ApplyClientModel(int client)
 {
@@ -1821,7 +2302,7 @@ void UpdateUpgradeVisibility(int client)
 	ApplyPrestigeConfig(client);
 }
 
-void SendPrestigeToDiscord(int client, int oldPrestige, int newPrestige)
+void SendPrestigeToDiscord(int client, int oldPrestige, int newPrestige, int playerLevelBefore, int playerXPBefore)
 {
 	if(!g_cvDiscordEnable.BoolValue)
 		return;
@@ -1837,6 +2318,9 @@ void SendPrestigeToDiscord(int client, int oldPrestige, int newPrestige)
 	
 	char mapName[128];
 	GetCurrentMap(mapName, sizeof(mapName));
+	
+	int playerLevelAfter = SMRPG_GetClientLevel(client);
+	int playerXPAfter = SMRPG_GetClientExperience(client);
 	
 	int players = 0, zombies = 0, humans = 0;
 	for(int i = 1; i <= MaxClients; i++)
@@ -1867,15 +2351,76 @@ void SendPrestigeToDiscord(int client, int oldPrestige, int newPrestige)
 	#endif
 	
 	Webhook webhook = new Webhook("");
-	Embed embed = new Embed("🎉 Prestige Achieved", "");
-	embed.SetColor(0x00FF00);
 	
-	char description[512];
-	Format(description, sizeof(description),
-		"**Player:** %s\n**Prestige:** %d → %d\n**Map:** %s\n**Time:** %s\n**Players:** %d (%s: %d, %s: %d)", 
-		clientName, oldPrestige, newPrestige, mapName, timeString, players, teamHuman, humans, teamZombie, zombies);
+	char title[128];
+	Format(title, sizeof(title), "🎉 %s achieved %s!", clientName, g_PrestigeInfo[newPrestige].name);
 	
-	embed.SetDescription(description);
+	Embed embed = new Embed(title, "");
+	
+	int color = 0x00FF00;
+	if(newPrestige >= 5) color = 0xFFA500;
+	if(newPrestige >= 10) color = 0xFF0000;
+	if(newPrestige >= 15) color = 0x800080;
+	
+	embed.SetColor(color);
+	
+	char oldPrestigeName[64], newPrestigeName[64];
+	strcopy(oldPrestigeName, sizeof(oldPrestigeName), g_PrestigeInfo[oldPrestige].name);
+	strcopy(newPrestigeName, sizeof(newPrestigeName), g_PrestigeInfo[newPrestige].name);
+	
+	char steamId[32];
+	if(GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId)))
+	{
+		char description[512];
+		Format(description, sizeof(description),
+			"**Player:** %s\n**SteamID:** %s\n**Prestige:** %s → %s\n**Level Before:** %d\n**Level After:** %d\n**Experience Before:** %d XP\n**Experience After:** %d XP\n**Map:** %s\n**Time:** %s\n**Server Players:** %d (%s: %d, %s: %d)", 
+			clientName, 
+			steamId,
+			oldPrestigeName, 
+			newPrestigeName,
+			playerLevelBefore,
+			playerLevelAfter,
+			playerXPBefore,
+			playerXPAfter,
+			mapName, 
+			timeString, 
+			players, 
+			teamHuman, 
+			humans, 
+			teamZombie, 
+			zombies);
+		
+		embed.SetDescription(description);
+	}
+	else
+	{
+		char description[512];
+		Format(description, sizeof(description),
+			"**Player:** %s\n**Prestige:** %s → %s\n**Level Before:** %d\n**Level After:** %d\n**Experience Before:** %d XP\n**Experience After:** %d XP\n**Map:** %s\n**Time:** %s\n**Server Players:** %d (%s: %d, %s: %d)", 
+			clientName,
+			oldPrestigeName, 
+			newPrestigeName,
+			playerLevelBefore,
+			playerLevelAfter,
+			playerXPBefore,
+			playerXPAfter,
+			mapName, 
+			timeString, 
+			players, 
+			teamHuman, 
+			humans, 
+			teamZombie, 
+			zombies);
+		
+		embed.SetDescription(description);
+	}
+	
+	char footerText[128];
+	Format(footerText, sizeof(footerText), "Prestige System v1.1 | Before/After comparison");
+	EmbedFooter footer = new EmbedFooter(footerText);
+	embed.SetFooter(footer);
+	delete footer;
+	
 	webhook.AddEmbed(embed);
 	DataPack pack = new DataPack();
 	pack.Reset();

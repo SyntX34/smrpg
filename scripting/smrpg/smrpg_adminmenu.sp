@@ -262,6 +262,7 @@ void ShowPlayerPrestigeMenu(int client)
 {
 	int iTarget = g_iCurrentMenuTarget[client];
 	int iCurrentPrestige = SMRPG_GetClientPrestigeLevel(iTarget);
+	int iMaxPrestige = 10;
 	
 	Menu hMenu = new Menu(Menu_HandlePrestigeSelect);
 	hMenu.SetTitle("%T > %N\n%T: %d", "Manage Prestige", client, iTarget, "Current Prestige", client, iCurrentPrestige);
@@ -276,8 +277,8 @@ void ShowPlayerPrestigeMenu(int client)
 	
 	hMenu.AddItem("", "", ITEMDRAW_SPACER);
 	
-	// List all prestige levels
-	for(int i = 0; i <= 8; i++)
+	// List all prestige levels - dynamic based on max prestige
+	for(int i = 0; i <= iMaxPrestige; i++)
 	{
 		Format(sBuffer, sizeof(sBuffer), "Prestige %d", i);
 		if(i == iCurrentPrestige)
@@ -428,8 +429,9 @@ public int Menu_HandlePrestigeSetConfirm(Menu menu, MenuAction action, int param
 		int iTarget = g_iCurrentMenuTarget[param1];
 		int iNewPrestige = StringToInt(sInfo);
 		int iOldPrestige = SMRPG_GetClientPrestigeLevel(iTarget);
+		int iMaxPrestige = 10;
 		
-		if(iNewPrestige >= 0 && iNewPrestige <= 8)
+		if(iNewPrestige >= 0 && iNewPrestige <= iMaxPrestige)
 		{
 			SMRPG_SetClientPrestigeLevel(iTarget, iNewPrestige);
 			
